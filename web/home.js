@@ -86,7 +86,7 @@
   ];
   // Apps shown at once, as on Android: 8 (today's smallest tiles, 178 wide); the shelf scrolls for the rest. The
   // built-in list keeps 8 too.
-  var SHELF_VISIBLE = 8, FEW_APPS = 8;
+  var SHELF_VISIBLE = 5, FEW_APPS = 8;
 
   function shelfKey(app) {
     for (var i = 0; i < SHELF.length; i++) if (SHELF[i][1].test(app.id) || SHELF[i][2].test(app.title)) return SHELF[i];
@@ -111,7 +111,8 @@
   // Android app does with the TV art, the logo is lifted off it once: the background goes transparent and the rest is
   // cropped to the logo, which then fills the tile on the brand's color.
   var lifted = {};   // icon url -> {src, bg: [r, g, b], ink: luminance histogram} or false (keep the icon as it is)
-  var LIFT_SIZE = 240;
+  // As large as the Top Shelf draws a logo (520 px wide), so it stays sharp there; never above the icon's own size.
+  var LIFT_SIZE = 520;
 
   // sRGB (0-255) to linear light, computed once: lift() needs it for every pixel, and old TVs are slow at Math.pow.
   var LINEAR = [];
@@ -274,6 +275,8 @@
   }
 
   function paint(box, top, bottom) {
+    box.setAttribute('data-top', top);   // for the Top Shelf's lights (aurora)
+    box.setAttribute('data-bottom', bottom);
     box.style.background = '-webkit-linear-gradient(top, ' + top + ', ' + bottom + ')';
     box.style.background = 'linear-gradient(' + top + ', ' + bottom + ')';
   }
@@ -316,6 +319,7 @@
       var hex = '#' + ((1 << 24) | (logo.bg[0] << 16) | (logo.bg[1] << 8) | logo.bg[2]).toString(16).slice(1);
       paint(box, bg, darken(hex, 0.93));
     }
+    updateFeature();   // the Top Shelf shows the logo as soon as it's read
   }
 
   /** An app's face: its logo on its brand color (or its name, when the icon can't be read). */
@@ -375,6 +379,9 @@
     }
     shelf = out;
     others = apps.filter(function (x) { return shelf.indexOf(x) < 0; });
+    // The HDMI box picked as the Live TV button (a streamer): first on the shelf, so it's one press from Home.
+    var box = boxTV();
+    if (box && box !== liveTV()) shelf.unshift({id: box.id, title: box.label || boxLabel(), input: true, color: '#3A3A3C'});
   }
 
   // MARK: - Focus
@@ -400,13 +407,16 @@
     for (i = 0; i < list.length; i++) setClass(list[i], 'focus', st.zone === Z.CARDS && st.card === i);
     list = $('tiles').children;
     for (i = 0; i < list.length; i++) setClass(list[i], 'focus', st.zone === Z.SHELF && st.shelf === i);
+    list = $('names').children;
+    for (i = 0; i < list.length; i++) setClass(list[i], 'on', st.zone === Z.SHELF && st.shelf === i);
     revealShelf();
+    if (st.zone !== Z.APPS) updateFeature();
     list = document.querySelectorAll('#drawer .key');
     for (i = 0; i < list.length; i++) setClass(list[i], 'focus', st.zone === Z.DRAWER && st.drawer === i);
     list = document.querySelectorAll('#apps .cell');
     for (i = 0; i < list.length; i++) setClass(list[i], 'focus', st.zone === Z.APPS && st.grid === i);
     var rows = Math.max(1, Math.ceil(others.length / 5)), r = Math.floor(st.grid / 5), first = Math.max(0, Math.min(rows - 3, r - 1));
-    $('apps').lastChild.style.webkitTransform = $('apps').lastChild.style.transform = 'translateY(' + (-first * 239) + 'px)';
+    $('apps').lastChild.style.webkitTransform = $('apps').lastChild.style.transform = 'translateY(' + (-first * APPS_ROW) + 'px)';
     focusRows($('settings'), st.row, st.zone === Z.SETTINGS);
     focusRows($('shelfedit'), st.edit, st.zone === Z.EDIT);
     focusRows($('langpick'), st.lang, st.zone === Z.LANG);
@@ -414,6 +424,11 @@
     focusRows($('citypick'), st.city, st.zone === Z.CITY);
     focusRows($('keypick'), st.key, st.zone === Z.KEY);
     setClass(body, 'drawer-open', st.zone === Z.DRAWER);
+    setClass(body, 'on-shelf', st.zone === Z.SHELF);   // the clock grows into the Top Shelf (atv.css)
+    setClass(body, 'apps-open', st.zone === Z.APPS);
+    // All Apps: the sky's lights follow the focused app there too.
+    var cellNow = st.zone === Z.APPS && document.querySelectorAll('#apps .cell')[st.grid];
+    if (cellNow && others[st.grid]) aurora(others[st.grid], cellNow.querySelector('.face'));
     followSoon();
   }
 
@@ -503,7 +518,7 @@
     }
     st.card = Math.min(st.card, Math.max(0, list.length - 1));
     if (!list.length && st.zone === Z.CARDS) st.zone = Z.SHELF;
-    backdrop(list.length ? Data.image(list[st.card].backdrop, 'w300') : '');
+    backdrop(list.length ? Data.image(list[st.card].backdrop, 'w780') : '');
     updateFocus();
   }
 
@@ -513,9 +528,9 @@
    * transform and the backdrop's opacity animate: the widths change at once (older TVs).
    */
   function layoutCards() {
-    var holder = $('cards'), nodes = holder.children, left = 80, scroll = Math.max(0, st.card - 2) * 360;
+    var holder = $('cards'), nodes = holder.children, left = 106, scroll = Math.max(0, st.card - 2) * 280;
     for (var i = 0; i < nodes.length; i++) {
-      var wide = i === st.card, w = wide ? 1040 : 320, n = nodes[i], at = left - scroll;
+      var wide = i === st.card, w = wide ? 800 : 240, n = nodes[i], at = left - scroll;
       n.style.left = left + 'px';
       n.style.width = w + 'px';
       setClass(n, 'wide', wide);
@@ -560,13 +575,96 @@
   function followSoon() {
     clearTimeout(bgTimer);
     bgTimer = setTimeout(function () {
-      if (cards.length) backdrop(Data.image(cards[Math.min(st.card, cards.length - 1)].backdrop, 'w300'));
+      if (cards.length) backdrop(Data.image(cards[Math.min(st.card, cards.length - 1)].backdrop, 'w780'));
     }, BG_FOLLOW_MS);
   }
 
+  // MARK: - Pixel clock: the time as a dot matrix, 5 × 7 pixels a digit, lit dots on faint unlit ones
+
+  var PIXEL_FONT = {
+    '0': ['01110', '10001', '10011', '10101', '11001', '10001', '01110'],
+    '1': ['00100', '01100', '00100', '00100', '00100', '00100', '01110'],
+    '2': ['01110', '10001', '00001', '00010', '00100', '01000', '11111'],
+    '3': ['11110', '00001', '00001', '01110', '00001', '00001', '11110'],
+    '4': ['00010', '00110', '01010', '10010', '11111', '00010', '00010'],
+    '5': ['11111', '10000', '11110', '00001', '00001', '10001', '01110'],
+    '6': ['00110', '01000', '10000', '11110', '10001', '10001', '01110'],
+    '7': ['11111', '00001', '00010', '00100', '01000', '01000', '01000'],
+    '8': ['01110', '10001', '10001', '01110', '10001', '10001', '01110'],
+    '9': ['01110', '10001', '10001', '01111', '00001', '00010', '01100'],
+    ':': ['0', '0', '1', '0', '1', '0', '0'],
+    '.': ['0', '0', '0', '0', '0', '0', '1'],
+    '-': ['000', '000', '000', '111', '000', '000', '000'],
+    '\u00B0': ['010', '101', '010', '000', '000', '000', '000']
+  };
+  var PIXEL_ON = '#F5F5F7', PIXEL_ACCENT = '#FF8A3D', PIXEL_OFF = 'rgba(255, 255, 255, 0.07)';
+
+  function pixelDot(ctx, x, y, size, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + size - r, y);
+    ctx.quadraticCurveTo(x + size, y, x + size, y + r);
+    ctx.lineTo(x + size, y + size - r);
+    ctx.quadraticCurveTo(x + size, y + size, x + size - r, y + size);
+    ctx.lineTo(x + r, y + size);
+    ctx.quadraticCurveTo(x, y + size, x, y + size - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.fill();
+  }
+
+  /**
+   * Draws the time into a canvas in holder, cell px a pixel; glow adds a soft light around the lit dots (the
+   * screensaver). Drawn only when the text changes, once a minute: nothing animates. Letters (AM, PM) are left out.
+   */
+  function pixelClock(holder, text, cell, glow) {
+    if (holder.getAttribute('data-text') === text) return;
+    holder.setAttribute('data-text', text);
+    var glyphs = [], i, cols = 0;
+    for (i = 0; i < text.length; i++) if (PIXEL_FONT[text.charAt(i)]) glyphs.push(text.charAt(i));
+    for (i = 0; i < glyphs.length; i++) cols += PIXEL_FONT[glyphs[i]][0].length + (i ? 1 : 0);
+    var pad = glow ? cell : 0, canvas = holder.querySelector('canvas') || el('canvas', 'pixels', holder);
+    canvas.width = Math.max(1, cols * cell + 2 * pad);
+    canvas.height = 7 * cell + 2 * pad;
+    var ctx = canvas.getContext('2d'), dot = Math.round(cell * 0.84), r = cell * 0.2, x0 = pad;
+    ctx.shadowColor = 'rgba(255, 138, 61, 0.55)';
+    for (i = 0; i < glyphs.length; i++) {
+      var rows = PIXEL_FONT[glyphs[i]], w = rows[0].length, colon = glyphs[i] === ':' || glyphs[i] === '.';
+      for (var y = 0; y < 7; y++) {
+        for (var x = 0; x < w; x++) {
+          var lit = rows[y].charAt(x) === '1';
+          if (!lit && colon) continue;
+          ctx.fillStyle = lit ? (colon ? PIXEL_ACCENT : PIXEL_ON) : PIXEL_OFF;
+          ctx.shadowBlur = lit && glow ? cell * 0.8 : 0;
+          pixelDot(ctx, x0 + x * cell, pad + y * cell, dot, r);
+        }
+      }
+      x0 += (w + 1) * cell;
+    }
+  }
+
+  /** The status line at the top left: how the TV is online, then the date. */
+  var netShown = '';
+
+  function renderStatus() {
+    $('status').lastChild.textContent = formatDate('format|EEEE, MMMM d', Date.now());
+    TV.network(function (n) {
+      var holder = $('status').firstChild, key = n ? n.type + (n.type === 'wifi' ? Math.round((n.strength || 0) * 3) : '') : '';
+      if (key === netShown) return;
+      netShown = key;
+      holder.innerHTML = '';
+      if (!n) return;
+      if (n.type === 'ethernet') { sym('ethernet', holder); return; }
+      // Wi-Fi: white when strong, dimmer when fair, orange when weak, faint when offline.
+      var bars = n.type === 'wifi' ? Math.max(1, Math.round((n.strength || 0) * 3)) : 0;
+      sym('wifi', holder).className += ' s' + bars;
+    });
+  }
+
   function renderClock() {
+    renderStatus();
     var d = new Date(), c = $('clock');
-    c.firstChild.textContent = formatDate('format|h:mm', d.getTime());
+    pixelClock(c.firstChild, formatDate('format|h:mm', d.getTime()), 15, false);   // drawn large, shown at 40% in the top bar (atv.css)
     c.lastChild.textContent = formatDate('format|EEEE, MMMM d', d.getTime());
   }
 
@@ -579,58 +677,102 @@
   // MARK: - Shelf
 
   var shelfFirst = 0, tileStep = 0, tileLeft = 0;
+  // As tvOS's home screen: 5:3 icons in a row from the safe area's left edge, the next one cut by the screen's edge.
+  var TILE_W = 300, TILE_H = 180, TILE_GAP = 52, TILE_TOP = 690, TILE_LEFT = 106;
 
   function renderShelf() {
-    var n = Math.min(shelf.length, SHELF_VISIBLE), gap = 48, pad = 40;
-    // 16:9 tiles, as on Android: never taller than 126, and the glass keeps its bottom edge.
-    var tw = Math.min(126 * 16 / 9, (1760 - Math.max(0, n - 1) * gap) / Math.max(1, n)), th = tw * 9 / 16;
-    var width = n * tw + Math.max(0, n - 1) * gap, left = (1920 - width) / 2;
+    var tw = TILE_W, th = TILE_H;
     var platter = $('platter');
-    platter.style.display = n ? '' : 'none';
-    platter.style.left = (left - pad) + 'px';
-    platter.style.width = (width + 2 * pad) + 'px';
-    platter.style.top = (814 + 126 - th) + 'px';
-    platter.style.height = (th + 2 * pad) + 'px';
-    $('quotes').style.right = (1920 - left - width) + 'px';
-    var tiles = $('tiles');
+    platter.style.display = 'none';
+    platter.innerHTML = '';
+    var tiles = $('tiles'), names = $('names');
     tiles.innerHTML = '';
-    tileStep = tw + gap;
-    tileLeft = left;
-    shelfFirst = Math.max(0, Math.min(shelfFirst, shelf.length - n));
+    names.innerHTML = '';
+    tileStep = tw + TILE_GAP;
+    tileLeft = TILE_LEFT;
+    shelfFirst = Math.max(0, Math.min(shelfFirst, shelf.length - Math.min(shelf.length, SHELF_VISIBLE)));
     for (var i = 0; i < shelf.length; i++) {
-      var t = el('div', 'tile', tiles);
-      t.style.top = (854 + 126 - th) + 'px';
+      var t = el('div', 'tile' + (shelf[i].input ? ' input' : ''), tiles);
+      t.style.top = TILE_TOP + 'px';
       t.style.width = tw + 'px';
       t.style.height = th + 'px';
       face(shelf[i], t, wordFit(shelf[i].title, tw, 30));
+      if (shelf[i].input) sym('hdmi', t).className += ' insym';
       hover(t, Z.SHELF, i);
-    }
-    // More apps than fit: a small arrow inside the glass's edge on each side that has more, where no tile reaches
-    // even focused (inside the screen's safe area, as on Android).
-    platter.innerHTML = '';
-    for (var a = 0; a < 2; a++) {
-      var arrow = sym('chevron_right', platter);
-      arrow.className += a ? ' more' : ' more back';
-      arrow.style.left = (a ? width + 2 * pad - 14 : 14) - 8.5 + 'px';
-      arrow.style.top = (pad + th / 2 - 8.5) + 'px';
+      var name = el('div', 'nm', names, shelf[i].title);
+      name.style.top = (TILE_TOP + th + 34) + 'px';
+      name.style.width = tw + 'px';
     }
     st.shelf = Math.min(st.shelf, Math.max(0, shelf.length - 1));
     placeTiles();
   }
 
-  /** The row slides (a transform on #tiles, which old TVs animate), and the apps it takes past the glass fade out. */
+  /** The row slides (a transform on #tiles and #names, which old TVs animate); the apps just past the window show dimmed. */
   function placeTiles() {
-    var row = $('tiles'), tiles = row.children, n = Math.min(shelf.length, SHELF_VISIBLE);
+    var row = $('tiles'), tiles = row.children, names = $('names'), n = Math.min(shelf.length, SHELF_VISIBLE);
     for (var i = 0; i < shelf.length; i++) {
-      var shown = i >= shelfFirst && i < shelfFirst + n;
-      tiles[i].style.left = (tileLeft + i * tileStep) + 'px';
-      tiles[i].style.opacity = shown ? '' : '0';
+      var shown = i >= shelfFirst && i < shelfFirst + n, near = i === shelfFirst - 1 || i === shelfFirst + n;
+      tiles[i].style.left = names.children[i].style.left = (tileLeft + i * tileStep) + 'px';
+      tiles[i].style.opacity = shown ? '' : near ? '0.45' : '0';
       tiles[i].style.pointerEvents = shown ? '' : 'none';
     }
-    row.style.webkitTransform = row.style.transform = 'translateX(' + (-shelfFirst * tileStep) + 'px)';
-    var arrows = $('platter').children;
-    arrows[0].style.visibility = shelfFirst > 0 ? '' : 'hidden';
-    arrows[1].style.visibility = shelfFirst + n < shelf.length ? '' : 'hidden';
+    row.style.webkitTransform = row.style.transform = names.style.webkitTransform = names.style.transform =
+      'translateX(' + (-shelfFirst * tileStep) + 'px)';
+  }
+
+  /** Without picks, the Top Shelf shows the focused app: its logo, large, on its brand color (its name without one). */
+  function updateFeature() {
+    var app = shelf[st.shelf], tile = $('tiles').children[st.shelf];
+    if (!app || !tile) return;
+    aurora(app, tile);
+    var logo = tile.querySelector('img'), f = $('feature'), key = app.id + '|' + (logo ? logo.src + logo.className : '');
+    if (f.getAttribute('data-for') === key) return;
+    f.setAttribute('data-for', key);
+    f.innerHTML = '';
+    if (logo && !app.input) {
+      // A logo lifted off the TV's icon, or one bundled in icons/; otherwise the TV's whole icon, as a card.
+      var bare = logo.className === 'logo' || /(^|\/)icons\//.test(logo.getAttribute('src') || '');
+      el('img', bare ? 'logo' : 'icon', f).src = logo.src;
+      f.className = 'art';
+    } else {
+      f.textContent = app.title;
+      f.className = '';
+    }
+  }
+
+  // MARK: - Aurora: three soft lights in the app's colors behind the Top Shelf
+
+  var auroraFront = 0, auroraFor = null;
+
+  /** A light's color: the brand's, or a cool silver for black, white and gray brands (Netflix's tile is black). */
+  function light(color, a) {
+    var c = rgbOf(color);
+    if (!colorful(c)) c = [150, 160, 190];
+    return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + a + ')';
+  }
+
+  /**
+   * Each app gets its own sky: the lights' places come from its id, so moving along the row moves them. The two
+   * layers cross-fade (opacity) and the new one settles from a little larger (transform): nothing else animates, and
+   * nothing moves while the focus rests.
+   */
+  function aurora(app, tile) {
+    var top = tile.getAttribute('data-top'), bottom = tile.getAttribute('data-bottom'), key = app.id + top + bottom;
+    if (key === auroraFor) return;
+    auroraFor = key;
+    var h = 7;
+    for (var i = 0; i < app.id.length; i++) h = (h * 31 + app.id.charCodeAt(i)) & 0xffff;
+    var layers = document.querySelectorAll('#sky .aurora'), next = layers[1 - auroraFront], blobs = next.children;
+    var spots = [[-260 + h % 420, -560 + (h >> 3) % 240], [760 + (h >> 5) % 560, -700 + (h >> 7) % 260], [240 + (h >> 9) % 640, -220 + (h >> 2) % 160]];
+    var colors = [light(top, 0.9), light(bottom, 0.85), light(top, 0.5)];
+    for (var b = 0; b < blobs.length; b++) {
+      blobs[b].style.background = 'radial-gradient(closest-side, ' + colors[b] + ', rgba(0, 0, 0, 0))';
+      blobs[b].style.left = spots[b][0] + 'px';
+      blobs[b].style.top = spots[b][1] + 'px';
+    }
+    setClass(next, 'on', true);
+    setClass(layers[auroraFront], 'on', false);
+    auroraFront = 1 - auroraFront;
   }
 
   /** Scrolls the shelf, one app at a time, so the focused app is shown. */
@@ -711,7 +853,7 @@
     }
     var now = el('div', 'now', card);
     sym(Data.symbol(w.code, w.isDay), now);
-    el('span', 'temp', now, Data.degrees(w.temp));
+    pixelClock(el('span', 'temp', now), Data.degrees(w.temp), 10, false);   // in the pixel clock's dots (atv.css)
     el('div', 'cond', card, Data.condition(w.code, w.isDay));
     var parts = weatherParts(w);
     extraKey = parts.join(' · ');
@@ -805,6 +947,9 @@
 
   // MARK: - All Apps
 
+  // As tvOS's app grid: five 5:3 icons a row, from the safe area's left edge, the focused one's name below it.
+  var APPS_LEFT = 106, APPS_STEP = 352, APPS_TOP = 200, APPS_ROW = 268;
+
   function renderApps() {
     var sheet = $('apps');
     sheet.firstChild.textContent = tr('All Apps');
@@ -812,8 +957,8 @@
     grid.innerHTML = '';
     for (var i = 0; i < others.length; i++) {
       var r = Math.floor(i / 5), c = i % 5, cell = el('div', 'cell', grid);
-      cell.style.left = (130 + c * 340) + 'px';
-      cell.style.top = (196 + r * 239) + 'px';
+      cell.style.left = (APPS_LEFT + c * APPS_STEP) + 'px';
+      cell.style.top = (APPS_TOP + r * APPS_ROW) + 'px';
       face(others[i], el('div', 'face', cell), wordFit(others[i].title, 300, 34));
       el('div', 'label', cell, others[i].title);
       hover(cell, Z.APPS, i);
@@ -904,7 +1049,7 @@
         step: function (d) { cycle('openPicks', ['apps', 'nuvio'], open, d); }});
     }
     rows.push({label: tr('Live TV button'), value: boxLabel(),
-      step: function (d) { cycle('boxInput', ['live', 'hdmi1', 'hdmi2', 'hdmi3', 'hdmi4'], Prefs.boxInput(), d); renderTop(); }});
+      step: function (d) { cycle('boxInput', ['live', 'hdmi1', 'hdmi2', 'hdmi3', 'hdmi4'], Prefs.boxInput(), d); renderTop(); pickShelf(); renderShelf(); }});
     rows.push({label: tr('Shelf'), value: '›', shelf: true, step: function (d) { if (d >= 0) openShelfEdit(); }});
     rows.push({label: tr('About this TV'), value: '›', about: true, step: function (d) { if (d >= 0) openAbout(); }});
     if (TV.canOpenSettings) rows.push({label: tr('TV Settings'), value: '›', step: function (d) { if (d >= 0) tvSettings(); }});
@@ -1290,7 +1435,7 @@
   // MARK: - Shelf editor: which apps, in what order
 
   function editList() {
-    var ids = shelf.map(function (a) { return a.id; });
+    var ids = shelf.filter(function (a) { return !a.input; }).map(function (a) { return a.id; });
     return {ids: ids, rows: apps.slice().sort(function (a, b) {
       var ia = ids.indexOf(a.id), ib = ids.indexOf(b.id);
       if (ia >= 0 || ib >= 0) return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
@@ -1679,7 +1824,7 @@
   function tickAmbient() {
     if (!ambientOn) return;
     var a = $('ambient'), d = new Date(), w = Prefs.weather() ? Data.weather : null;
-    a.querySelector('.clock').textContent = formatDate('format|h:mm', d.getTime());
+    pixelClock(a.querySelector('.clock'), formatDate('format|h:mm', d.getTime()), 26, true);
     a.querySelector('.date').textContent = formatDate('format|EEEE, MMMM d', d.getTime());
     // The forecast as it is now (a new one comes every 30 minutes), and only with the weather card on, as on Android.
     a.querySelector('.temp').textContent = w ? Data.degrees(w.temp) : '';
@@ -1766,6 +1911,7 @@
       pickShelf();
       TV.inputs(function (list2) {
         inputs = list2;
+        pickShelf();
         if (done) done();
       });
     });
@@ -1837,6 +1983,7 @@
     }
     if (saverOn) tickSaverClock($('saver').querySelector('.clock'));
     if (ambientOn) tickAmbient();
+    renderStatus();
   }, 30000);
 
   // For the browser preview and tests.

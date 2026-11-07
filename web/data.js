@@ -67,7 +67,7 @@ var Prefs = (function () {
     version: 0,
     language: function () { return pick('language', CONFIG.language || 'auto'); },
     temperature: function () { return pick('temperature', CONFIG.temperature || 'auto'); },
-    theme: function () { return pick('theme', CONFIG.theme || 'auto'); },
+    theme: function () { return pick('theme', CONFIG.theme && CONFIG.theme !== 'auto' ? CONFIG.theme : 'dark'); },   // Apple TV style: dark unless picked
     weather: function () { return pick('weather', true); },
     /** OK on the screensaver opens the title it shows, in its app; any other key only closes it (off by default). */
     saverWatch: function () { return pick('saverWatch', false) === true; },

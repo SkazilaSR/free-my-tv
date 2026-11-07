@@ -1,0 +1,300 @@
+/*
+ * Apple TV style, over home.css: a Top Shelf (the focused pick's photo, sharp, fading to black), 5:3 icons in a row
+ * with the focused one's name below, a centered tab pill and a small clock in the top bar.
+ * Same limits as home.css: no variables, grid or backdrop-filter; only transform and opacity animate.
+ * #stage prefixes win over home.css's .night rules.
+ */
+
+/* MARK: - Top Shelf */
+
+#stage #sky { background: #000; }
+#stage #sky .night { background: -webkit-linear-gradient(top, #0B0B0D, #000); background: linear-gradient(#0B0B0D, #000); }
+#stage #sky canvas { left: 0; top: 0; width: 1920px; height: 1080px; }
+/* Aurora (home.js): two layers of three soft lights, cross-faded when the focused app changes; only without picks. */
+#stage #sky .aurora {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+  opacity: 0;
+  -webkit-transform: scale(1.06);
+  transform: scale(1.06);
+  -webkit-transition: opacity 0.9s, -webkit-transform 1.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: opacity 0.9s, transform 1.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+#stage #sky .aurora .b { position: absolute; width: 1300px; height: 1300px; }
+.no-picks #stage #sky .aurora.on { opacity: 1; -webkit-transform: none; transform: none; }
+
+/* A faint dot matrix over the lights, as the pixel clock's: an LED wall, fading out toward the apps. */
+#stage #sky .dots {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1920px;
+  height: 760px;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.11) 1.6px, rgba(255, 255, 255, 0) 2.2px);
+  background-size: 12px 12px;
+  -webkit-mask-image: -webkit-linear-gradient(top, #000 0%, #000 45%, rgba(0, 0, 0, 0) 100%);
+  display: none;
+}
+.no-picks #stage #sky .dots { display: block; }
+#stage #sky .veil {
+  background: -webkit-linear-gradient(top, rgba(0, 0, 0, 0.1) 0%, rgba(0, 0, 0, 0.3) 38%, rgba(0, 0, 0, 0.92) 62%, #000 74%);
+  background: linear-gradient(rgba(0, 0, 0, 0.1) 0%, rgba(0, 0, 0, 0.3) 38%, rgba(0, 0, 0, 0.92) 62%, #000 74%);
+}
+.night #stage #sky .veil {
+  background: -webkit-linear-gradient(top, rgba(0, 0, 0, 0.1) 0%, rgba(0, 0, 0, 0.3) 38%, rgba(0, 0, 0, 0.92) 62%, #000 74%);
+  background: linear-gradient(rgba(0, 0, 0, 0.1) 0%, rgba(0, 0, 0, 0.3) 38%, rgba(0, 0, 0, 0.92) 62%, #000 74%);
+}
+
+/* Without picks: the focused app's name, large, on its color. */
+#feature {
+  position: absolute;
+  left: 106px;
+  top: 470px;
+  max-width: 1500px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 96px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  color: #F5F5F7;
+  text-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
+  display: none;
+}
+.no-picks #feature { display: block; }
+/* The app's logo: as large as fits a 520 × 150 box, on its own proportions, so every app reads at one size. */
+#feature.art { top: 440px; height: 150px; }
+#feature img { display: block; width: 520px; height: 150px; object-fit: contain; object-position: left center; -webkit-filter: drop-shadow(0 6px 24px rgba(0, 0, 0, 0.4)); filter: drop-shadow(0 6px 24px rgba(0, 0, 0, 0.4)); }
+/* The TV's whole icon, when its logo couldn't be read off it: a rounded card. */
+#feature img.icon { width: 250px; height: 150px; object-fit: cover; border-radius: 26px; }
+
+/* MARK: - Top bar: centered tab pill, small clock, round buttons */
+
+#stage #title, #stage #quotes { display: none; }
+#stage #tabs {
+  left: 50%;
+  top: 56px;
+  height: 68px;
+  padding: 6px;
+  border-radius: 40px;
+  -webkit-transform: translateX(-50%);
+  transform: translateX(-50%);
+  background: rgba(44, 44, 46, 0.72);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+#stage .tab { height: 68px; line-height: 68px; font-size: 28px; color: rgba(235, 235, 245, 0.6); }
+#stage .tab.on { color: #F5F5F7; }
+#stage .tab.focus { color: #1C1C1E; background: #F5F5F7; -webkit-transform: scale(1.06); transform: scale(1.06); }
+#stage .tab, #stage .round, #stage .card, #stage .key {
+  -webkit-transition: -webkit-transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.2s, background-color 0.17s, color 0.17s;
+  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.2s, background-color 0.17s, color 0.17s;
+}
+
+#stage .round { top: 56px; background: rgba(44, 44, 46, 0.72); color: rgba(255, 255, 255, 0.92); }
+#stage .round.focus { background: #F5F5F7; color: #1C1C1E; }
+#stage .round .tip { color: #F5F5F7; }
+
+#stage #clock {
+  display: block;
+  left: auto;
+  right: 352px;
+  top: 72px;
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: #F5F5F7;
+  -webkit-font-feature-settings: 'tnum';
+  font-feature-settings: 'tnum';
+}
+#stage #clock .date { display: none; }
+
+/* MARK: - Picks: a smaller row in the Top Shelf */
+
+#stage .card { top: 176px; height: 340px; }
+#stage .card .img { border-radius: 20px; background-color: #2C2C2E; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); }
+#stage .card .img::after { border-radius: 20px; box-shadow: none; }
+#stage .card.focus { -webkit-transform: scale(1.06); transform: scale(1.06); }
+#stage .card.focus .img { box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6); }
+#stage .card .name { top: 372px; font-size: 30px; color: #F5F5F7; text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6); }
+#stage .card .meta { top: 414px; font-size: 24px; color: rgba(235, 235, 245, 0.6); }
+
+/* MARK: - Apps: 5:3 icons, lifted when focused, the name below */
+
+#stage #platter { display: none; }
+#stage #names {
+  position: absolute;
+  left: 0;
+  top: 0;
+  -webkit-transition: -webkit-transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+#stage #tiles {
+  -webkit-transition: -webkit-transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+#stage .tile {
+  border-radius: 26px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  -webkit-transition: -webkit-transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.2s, opacity 0.3s;
+  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.2s, opacity 0.3s;
+}
+/* The sheen: a light from the top left that shows on the focused icon. */
+#stage .tile::after {
+  bottom: 0;
+  height: auto;
+  border-radius: 26px;
+  background: -webkit-linear-gradient(-45deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0) 48%);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0) 48%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+#stage .tile.focus { -webkit-transform: scale(1.1); transform: scale(1.1); box-shadow: 0 34px 60px rgba(0, 0, 0, 0.65); }
+
+/* The HDMI streamer: the input symbol above its name. */
+#stage .tile .insym { position: absolute; left: 50%; top: 40px; width: 52px; height: 52px; margin-left: -26px; color: #F5F5F7; }
+#stage .tile.input .word { margin-top: 10px; font-size: 28px; font-weight: 600; }
+
+.nm {
+  position: absolute;
+  text-align: center;
+  font-size: 26px;
+  font-weight: 600;
+  color: #F5F5F7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  -webkit-transition: opacity 0.15s;
+  transition: opacity 0.15s;
+}
+.nm.on { opacity: 1; }
+
+/* MARK: - Drawer: the same dark glass */
+
+#stage .key.focus { -webkit-transform: scale(1.08); transform: scale(1.08); }
+
+/* MARK: - Pixel clock: canvases drawn by pixelClock() in home.js */
+
+/* The canvas is drawn at 15 px a dot: 40% in the top bar, full size in the Top Shelf while the focus is on the apps
+   (without picks, which would sit under it). Only the transform animates. */
+#stage #clock {
+  top: 69px;
+  line-height: 0;
+  -webkit-transform-origin: 100% 0;
+  transform-origin: 100% 0;
+  -webkit-transform: scale(0.4);
+  transform: scale(0.4);
+  -webkit-transition: -webkit-transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.no-picks.on-shelf #stage #clock { -webkit-transform: translate(246px, 110px); transform: translate(246px, 110px); }
+#stage #clock .time, #stage #clock canvas { display: block; }
+#ambient .clock { left: 70px; top: 212px; line-height: 0; }
+#ambient .clock canvas { display: block; }
+
+/* MARK: - All Apps: the tvOS grid, on black */
+
+#stage #apps h2 { left: 106px; right: auto; top: 64px; text-align: left; font-size: 52px; font-weight: 700; letter-spacing: -0.01em; }
+#stage #apps .grid {
+  -webkit-transition: -webkit-transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+#stage .cell { width: 300px; height: 180px; }
+#stage .cell .face {
+  width: 300px;
+  height: 180px;
+  border-radius: 26px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  -webkit-transition: -webkit-transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.2s;
+  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.2s;
+}
+#stage .cell .face::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 26px;
+  background: -webkit-linear-gradient(-45deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0) 48%);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0) 48%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  opacity: 0;
+  -webkit-transition: opacity 0.17s;
+  transition: opacity 0.17s;
+}
+#stage .cell.focus .face { -webkit-transform: scale(1.1); transform: scale(1.1); box-shadow: 0 34px 60px rgba(0, 0, 0, 0.65); }
+#stage .cell.focus .face::after { opacity: 1; }
+#stage .cell .label { top: 214px; font-size: 26px; font-weight: 600; color: #F5F5F7; opacity: 0; -webkit-transition: opacity 0.15s; transition: opacity 0.15s; }
+#stage .cell.focus .label { opacity: 1; }
+
+/* MARK: - Status line: how the TV is online, and the date, at the top left (home.js renderStatus) */
+
+#status {
+  position: absolute;
+  left: 106px;
+  top: 74px;
+  height: 40px;
+  line-height: 40px;
+  white-space: nowrap;
+  font-size: 28px;
+  font-weight: 600;
+  color: rgba(235, 235, 245, 0.78);
+}
+#status .net { display: inline-block; vertical-align: top; }
+#status .net .sym { width: 32px; height: 32px; margin: 4px 16px 0 0; vertical-align: top; color: #F5F5F7; }
+#status .net .sym.s2 { opacity: 0.75; }
+#status .net .sym.s1 { color: #FF8A3D; }
+#status .net .sym.s0 { opacity: 0.3; }
+
+/* MARK: - Drawer: inputs, shortcuts and cards as dark glass over the aurora, with the LED dots; focus as the icons' */
+
+.drawer-open #stage #sky .lift, .night.drawer-open #stage #sky .lift { opacity: 0.18; }
+#stage .glass, .night #stage .glass {
+  background: rgba(22, 22, 26, 0.58);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+#stage .glass::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: inherit;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1.4px, rgba(255, 255, 255, 0) 2px);
+  background-size: 12px 12px;
+  pointer-events: none;
+}
+#stage .key { border-radius: 26px; }
+#stage .key.off, .night #stage .key.off { color: rgba(235, 235, 245, 0.6); }   /* not connected: dimmer, still readable (about 5:1) */
+#stage .key.focus, .night #stage .key.focus {
+  background: #F5F5F7;
+  color: #1C1C1E;
+  opacity: 1;
+  -webkit-transform: scale(1.08);
+  transform: scale(1.08);
+  box-shadow: 0 30px 56px rgba(0, 0, 0, 0.6);
+}
+#stage .key.focus::before { display: none; }
+#stage .key .label { font-weight: 600; }
+#stage .panel { border-radius: 30px; }
+#stage .panel .head { color: #F5F5F7; font-weight: 700; }
+#stage .row-title, .night #stage .row-title { color: rgba(235, 235, 245, 0.78); font-weight: 700; }
+
+/* The temperature in the pixel clock's dots (home.js renderPanels). */
+#weather .now .temp { display: inline-block; line-height: 0; vertical-align: 6px; }
+#weather .now .temp canvas { display: block; }
+
+/* MARK: - All Apps over the sky: its lights follow the focused app (home.js), the home screen steps back */
+
+#stage #apps { background: rgba(0, 0, 0, 0.15); }
+#stage #home { -webkit-transition: -webkit-transform 0.38s cubic-bezier(0.32, 0.72, 0.2, 1), opacity 0.24s; transition: transform 0.38s cubic-bezier(0.32, 0.72, 0.2, 1), opacity 0.24s; }
+.apps-open #stage #home { opacity: 0; }
+.apps-open #stage #sky canvas { opacity: 0; }
+.apps-open #stage #sky .aurora.on { opacity: 1; -webkit-transform: none; transform: none; }
+.apps-open #stage #sky .dots { display: block; }

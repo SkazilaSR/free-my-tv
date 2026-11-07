@@ -498,6 +498,37 @@ var TV = (function () {
     finish();
   }
 
+  // MARK: - Network, for the status line
+
+  /**
+   * How the TV is online: {type: 'wifi' | 'ethernet' | 'none', strength: 0..1 on Wi-Fi}, or null where the TV doesn't
+   * tell (LG). Samsung's NETWORK property names the connection; WIFI_NETWORK gives the signal.
+   */
+  function network(done) {
+    if (samsung) {
+      var info = window.tizen.systeminfo;
+      try {
+        info.getPropertyValue('NETWORK', function (n) {
+          var type = String(n.networkType || '').toUpperCase();
+          if (type === 'ETHERNET') { done({type: 'ethernet'}); return; }
+          if (type !== 'WIFI') { done({type: 'none'}); return; }
+          try {
+            info.getPropertyValue('WIFI_NETWORK', function (w) {
+              done({type: 'wifi', strength: typeof w.signalStrength === 'number' ? w.signalStrength : 1});
+            }, function () { done({type: 'wifi', strength: 1}); });
+          } catch (e) {
+            done({type: 'wifi', strength: 1});
+          }
+        }, function () { done(null); });
+      } catch (e) {
+        done(null);
+      }
+      return;
+    }
+    if (webos) { done(null); return; }
+    done(navigator.onLine === false ? {type: 'none'} : {type: 'wifi', strength: 0.8});   // the browser preview
+  }
+
   // MARK: - The TV, whichever it is
 
   return {
@@ -514,7 +545,11 @@ var TV = (function () {
     apps: function (done) {
       if (samsung) { samsungApps(done); return; }
       if (!webos) {
-        done(SAMPLE.map(function (s) { return {id: s[0], title: s[1], icon: '', color: s[2]}; }));
+        // The bundled logos where there is one, so the preview shows them as a Samsung TV does.
+        done(SAMPLE.map(function (s) {
+          var key = s[1].toLowerCase().replace(/[^a-z0-9]/g, '');
+          return {id: s[0], title: s[1], icon: SAMSUNG_ICON_NAMES[key] || '', color: s[2]};
+        }));
         return;
       }
       function list(res) {
@@ -604,6 +639,7 @@ var TV = (function () {
 
     /** The TV's model, firmware, system, IP address and this app's version, for About this TV. */
     about: about,
+    network: network,
 
     /** LG: keeps the TV's screensaver away while ours will take over (`hold` says when). */
     holdScreenSaver: holdScreenSaver,
