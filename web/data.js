@@ -109,6 +109,17 @@ var Prefs = (function () {
       var k = String(pick('boxInput', 'live')).toLowerCase();
       return /^hdmi[1-4]$/.test(k) ? k : 'live';
     },
+    /** A name the person gave an input on Free My TV ('hdmi1' -> 'Apple TV'), or '' for the TV's own. */
+    inputName: function (key) {
+      var names = pick('inputNames', null);
+      return names && typeof names[key] === 'string' ? names[key] : '';
+    },
+    setInputName: function (key, name) {
+      var old = pick('inputNames', null) || {}, names = {};
+      for (var k in old) if (Object.prototype.hasOwnProperty.call(old, k) && k !== key) names[k] = old[k];
+      if (name) names[key] = name;
+      this.set('inputNames', names);
+    },
     set: function (name, value) { v[name] = value; save(); this.version++; },
     setCoin: function (i, on) {
       var c = (pick('coins', null) || [true, true, true, true]).slice();

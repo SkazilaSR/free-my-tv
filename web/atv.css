@@ -298,3 +298,60 @@
 .apps-open #stage #sky canvas { opacity: 0; }
 .apps-open #stage #sky .aurora.on { opacity: 1; -webkit-transform: none; transform: none; }
 .apps-open #stage #sky .dots { display: block; }
+
+/* MARK: - With GSAP (body.gsap, home.js): it moves these, so their CSS transforms and transform transitions step aside.
+   Colors and shadows still fade in CSS. */
+
+.gsap #stage .tile, .gsap #stage .cell .face, .gsap #stage .key, .gsap #stage .round, .gsap #stage .tab, .gsap #stage .card {
+  -webkit-transition-property: box-shadow, background-color, color;
+  transition-property: box-shadow, background-color, color;
+}
+.gsap #stage .tile.focus, .gsap #stage .cell.focus .face, .gsap #stage .key.focus, .gsap.night #stage .key.focus,
+.gsap #stage .round.focus, .gsap #stage .tab.focus, .gsap #stage .card.focus {
+  -webkit-transform: none;
+  transform: none;
+}
+.gsap #stage #tiles, .gsap #stage #names, .gsap #stage #cards, .gsap #stage #apps .grid, .gsap #stage #clock {
+  -webkit-transition: none;
+  transition: none;
+}
+.gsap #stage #clock, .gsap.no-picks.on-shelf #stage #clock { -webkit-transform: none; transform: none; }
+.gsap #stage #home, .gsap #stage #drawer { -webkit-transition: none; transition: none; }
+.gsap.drawer-open #stage #home, .gsap #stage #drawer, .gsap.drawer-open #stage #drawer { -webkit-transform: none; transform: none; }
+.gsap #stage #drawer, .gsap.drawer-open #stage #drawer { opacity: 0; }   /* until GSAP sets it: no flash at start */
+
+/* The pixel Wi-Fi (home.js pixelWifi): a 36 x 28 canvas before the date. */
+#status .net canvas { display: inline-block; margin: 6px 18px 0 0; vertical-align: top; }
+
+/* MARK: - Brand tiles (home.js brandFace, iconFace): as AeroTizen's tvOS tiles */
+
+#stage .tile .vlogo, #stage .cell .face .vlogo {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 104px;
+  height: 104px;
+  margin: -52px 0 0 -52px;
+}
+#stage .tile .vlogo.large, #stage .cell .face .vlogo.large { width: 120px; height: 120px; margin: -60px 0 0 -60px; }
+/* The app's own icon, never past its size: 112 px tall on a 180 px tile, as a rounded card. */
+#stage .tile img.appicon, #stage .cell .face img.appicon {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: auto;
+  height: 112px;
+  max-width: 220px;
+  max-height: 112px;
+  border-radius: 24px;
+  -webkit-transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+}
+
+/* The Top Shelf lockup: the mark at 150 px, then the name. */
+#feature.lockup { top: 440px; height: 150px; line-height: 150px; }
+#feature .mark { display: inline-block; vertical-align: middle; width: 150px; height: 150px; margin-right: 40px; }
+#feature img.mark { width: auto; max-width: 300px; border-radius: 34px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); }
+#feature .sym.mark { width: 120px; height: 120px; color: #F5F5F7; }
+#feature .name { display: inline-block; vertical-align: middle; line-height: 1.05; }
