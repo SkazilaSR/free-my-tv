@@ -1129,9 +1129,9 @@
 
   var auroraFor = null;
 
-  /** The LED wall over the lights, drawn once: a 12 px grid of faint dots, fading out over the lower half. */
-  function bakeDots() {
-    var c = document.querySelector('#sky .dots');
+  /** The LED wall over the lights, drawn once: a 12 px grid of faint dots, fading out over the lower half (all = not). */
+  function bakeDots(c, all) {
+    c = c || document.querySelector('#sky .dots');
     if (!c || !c.getContext) return;
     var ctx = c.getContext('2d'), tile = document.createElement('canvas');
     tile.width = tile.height = 12;
@@ -1143,6 +1143,7 @@
     t.fillRect(0, 0, 12, 12);
     ctx.fillStyle = ctx.createPattern(tile, 'repeat');
     ctx.fillRect(0, 0, c.width, c.height);
+    if (all) return;
     var fade = ctx.createLinearGradient(0, 0, 0, c.height);
     fade.addColorStop(0, '#000');
     fade.addColorStop(0.45, '#000');
@@ -2330,7 +2331,8 @@
     setClass($('saver'), 'on', false);
   }
 
-  // MARK: - The clock screensaver: a clock, the date and the weather, drifting slowly for OLED panels
+  // MARK: - The clock screensaver: live northern lights behind the LED wall, the pixel clock, the date and the
+  // temperature in dots, drifting slowly for OLED panels
 
   var ambientOn = false, ambientTimer = 0;
 
@@ -2338,6 +2340,14 @@
     if (ambientOn) return;
     var a = $('ambient');
     a.innerHTML = '';
+    var sky = el('canvas', 'live', a);
+    sky.width = 320;
+    sky.height = 180;
+    var dots = el('canvas', 'dots', a);
+    dots.width = 1920;
+    dots.height = 1080;
+    bakeDots(dots, 1);
+    el('div', 'veil', a);
     var shift = el('div', 'shift', a);
     el('div', 'clock', shift);
     el('div', 'date', shift);
@@ -2349,6 +2359,48 @@
     ambientTimer = setInterval(tickAmbient, 30000);
     tickAmbient();
     pixelIntro(a.querySelector('.clock'), 400);   // the screensaver's clock lights up as it fades in
+    liveAurora(sky);
+  }
+
+  /**
+   * The lights move: five soft bands, each on its own slow sine, added up as light is ('lighter'), drawn at a sixth
+   * of the screen ~24 times a second and stretched by the GPU. Only while the screensaver shows.
+   */
+  var LIVE_AURORA = [
+    // x, y on the screen, radius, height as a share of it, color, strength, speed, phase
+    [380, 220, 600, 0.6, [34, 227, 154], 0.85, 0.11, 0],
+    [930, 120, 680, 0.5, [18, 194, 233], 0.75, 0.08, 1.7],
+    [1460, 250, 640, 0.65, [123, 92, 255], 0.8, 0.1, 3.1],
+    [1820, 60, 480, 0.85, [192, 75, 255], 0.55, 0.13, 4.2],
+    [700, 500, 720, 0.4, [43, 91, 255], 0.42, 0.07, 2.3]
+  ];
+
+  function liveAurora(canvas) {
+    var ctx = canvas.getContext('2d'), k = canvas.width / 1920, last = 0, start = Date.now();
+    function draw(now) {
+      if (!ambientOn || !canvas.parentNode) return;
+      frame(draw);
+      if (now - last < 40) return;
+      last = now;
+      var t = (Date.now() - start) / 1000;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = '#030305';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.globalCompositeOperation = 'lighter';
+      for (var i = 0; i < LIVE_AURORA.length; i++) {
+        var b = LIVE_AURORA[i], s = b[6], p = b[7], rgb = b[4].join(', ');
+        var x = b[0] + 220 * Math.sin(t * s + p), y = b[1] + 50 * Math.sin(t * s * 1.3 + p);
+        var r = b[2] * (1 + 0.12 * Math.sin(t * s * 0.7 + p)), a = b[5] * (0.7 + 0.3 * Math.sin(t * s * 1.9 + p));
+        ctx.setTransform(k, 0, 0, k * b[3], x * k, y * k);
+        var g = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
+        g.addColorStop(0, 'rgba(' + rgb + ', ' + a.toFixed(3) + ')');
+        g.addColorStop(1, 'rgba(' + rgb + ', 0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(-r, -r, 2 * r, 2 * r);
+      }
+    }
+    frame(draw);
   }
 
   function tickAmbient() {
@@ -2356,8 +2408,11 @@
     var a = $('ambient'), d = new Date(), w = Prefs.weather() ? Data.weather : null;
     pixelClock(a.querySelector('.clock'), clockText(d), 26, true);
     a.querySelector('.date').textContent = formatDate('format|EEEE, MMMM d', d.getTime());
-    // The forecast as it is now (a new one comes every 30 minutes), and only with the weather card on, as on Android.
-    a.querySelector('.temp').textContent = w ? Data.degrees(w.temp) : '';
+    // The forecast as it is now (a new one comes every 30 minutes), and only with the weather card on, as on Android:
+    // the temperature in the clock's dots.
+    var temp = a.querySelector('.temp');
+    if (w) pixelClock(temp, Data.degrees(w.temp), 17, true);
+    else { temp.innerHTML = ''; temp.removeAttribute('data-text'); }
     a.querySelector('.cond').textContent = w ? Data.condition(w.code, w.isDay) : '';
     // A clock that never moves burns into an OLED: the drift of Android's clock without photos (40 × 26 px, 10 minutes).
     var phase = 2 * Math.PI * (d.getTime() / 1000 % 600) / 600, shift = a.querySelector('.shift');
@@ -2447,6 +2502,8 @@
     TV.apps(function (list) {
       apps = list.filter(function (a) { return !hidden(a); });
       Data.setApps(apps);
+      // The Home build's service: every real app, so an app opened from elsewhere isn't taken for Home.
+      TV.homeService.apps(list.map(function (a) { return a.id; }));
       pickShelf();
       TV.inputs(function (list2) {
         inputs = list2;
@@ -2522,7 +2579,7 @@
     Data.refresh();
     applyDim();   // automatic: medium from 22:00, off again at 07:00
     if (!saverOn && !ambientOn && !sheetOpen() && Date.now() - idleAt > SAVER_AFTER) {
-      if (saverMode() === 'clock') showAmbient(); else showSaver();
+      if (saverMode() === 'clock' || !saverPhotos().length) showAmbient(); else showSaver();   // no picks yet: the clock
     }
     if (saverOn) tickSaverClock($('saver').querySelector('.clock'));
     if (ambientOn) tickAmbient();

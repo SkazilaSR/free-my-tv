@@ -533,6 +533,33 @@ var TV = (function () {
 
   // MARK: - The TV, whichever it is
 
+  // MARK: - The Home build's service (tizen/home-service): AeroTizen's, on 127.0.0.1:47790
+
+  var HOME_SERVICE = 'http://127.0.0.1:47790', HOME_SERVICE_ID = 'DclHome001.Watcher';
+
+  /** 'start' launches the service; a path tells it something. Only in the Home build, and never in the way. */
+  function homeService(what) {
+    if (!samsung || !window.CONFIG || !CONFIG.homeService) return;
+    if (what === 'start') {
+      try {
+        window.tizen.application.launchAppControl(
+          new window.tizen.ApplicationControl('http://tizen.org/appcontrol/operation/service'), HOME_SERVICE_ID, null, null);
+      } catch (e) {}
+      return;
+    }
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', HOME_SERVICE + what);
+      x.timeout = 1500;
+      x.onerror = x.ontimeout = function () { homeService('start'); };   // not running: start it, as AeroTizen does
+      x.send();
+    } catch (e) {}
+  }
+
+  function homeWatch(id) { homeService('/watch?id=' + encodeURIComponent(id.indexOf('source:') === 0 ? SAMSUNG_VIEWER : id)); }
+
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) homeService('/home'); });
+
   return {
     name: webos ? 'webos' : samsung ? 'tizen' : 'browser',
 
@@ -589,9 +616,20 @@ var TV = (function () {
       });
     },
 
+    /**
+     * The Home build (tizen/build.py --home) runs AeroTizen's Home service beside the page: it's told what the page
+     * opens, so Home pressed in that app comes back here and an app opened elsewhere is left alone.
+     */
+    homeService: {
+      start: function () { homeService('start'); },
+      watch: function (id) { homeWatch(id); },
+      apps: function (ids) { homeService('/apps?ids=' + ids.map(encodeURIComponent).join(',')); }
+    },
+
     /** Opens an app (or an input); done(ok). */
     launch: function (id, params, done) {
       if (samsung) {
+        homeWatch(id);
         if (id.indexOf('source:') === 0) samsungSource(id, done);
         else samsungLaunch(id, done);
         return;

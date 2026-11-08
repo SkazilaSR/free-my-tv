@@ -201,8 +201,24 @@
 }
 .no-picks.on-shelf #stage #clock { -webkit-transform: translate(246px, 110px); transform: translate(246px, 110px); }
 #stage #clock .time, #stage #clock canvas { display: block; }
+/* The clock screensaver (home.js showAmbient): the live lights, the LED wall, a veil for the text, then the dots. */
+#ambient { background: #030305; }
+#ambient canvas.live, #ambient canvas.dots { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+#ambient .veil {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1920px;
+  height: 1080px;
+  background: -webkit-linear-gradient(top, rgba(3, 3, 5, 0) 0%, rgba(3, 3, 5, 0.15) 45%, rgba(3, 3, 5, 0.75) 100%);
+  background: linear-gradient(rgba(3, 3, 5, 0) 0%, rgba(3, 3, 5, 0.15) 45%, rgba(3, 3, 5, 0.75) 100%);
+}
 #ambient .clock { left: 70px; top: 212px; line-height: 0; }
 #ambient .clock canvas { display: block; }
+#ambient .side { top: 236px; }
+#ambient .temp { line-height: 0; }
+#ambient .temp canvas { display: inline-block; }
+#ambient .cond { margin-top: 18px; }
 
 /* MARK: - All Apps: the tvOS grid, on black */
 

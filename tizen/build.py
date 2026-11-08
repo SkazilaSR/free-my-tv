@@ -6,6 +6,8 @@
     python3 tizen/build.py --preview       # also leaves the files in out/tizen/ to open index.html in a browser
     python3 tizen/build.py --config other.properties
     python3 tizen/build.py --generic       # without config.properties: the TV's time zone picks the city (releases)
+    python3 tizen/build.py --home          # FreeMyTV-home.wgt: as DclHome001.Home with AeroTizen's Home service, for
+                                           # its CLI to make native Home (tizen/home-service/README.md)
 
 The same home screen as on LG (web/), with tizen/config.xml and tizen/icon.png, in a zip as Tizen Studio makes it.
 TVs only install signed packages. TizenBrew Installer signs it with the person's Samsung certificate on 2023 and
@@ -25,6 +27,7 @@ import webapp  # noqa: E402
 
 OUT = os.path.join(ROOT, 'out', 'tizen')
 WGT = os.path.join(ROOT, 'FreeMyTV-tizen.wgt')
+HOME_SERVICE = os.path.join(ROOT, 'tizen', 'home-service')
 
 
 def tizen_cli():
@@ -60,15 +63,44 @@ def sign(profile):
         sys.exit('The package came back without its signatures.')
 
 
-def build(preview, config, profile):
+def home_manifest(manifest):
+    """The manifest as AeroTizen's launcher ids, with its on-boot Home service: only that app id can be native Home."""
+    manifest = manifest.replace('id="https://freemytv.io/tizen"', 'id="https://freemytv.io/tizen-home"')
+    manifest = re.sub(r'<tizen:application [^>]*/>', '<tizen:application id="DclHome001.Home" package="DclHome001" '
+                      'required_version="2.4"/>\n'
+                      '    <tizen:service id="DclHome001.Watcher" on-boot="true" auto-restart="true">\n'
+                      '        <tizen:content src="service/index.js"/>\n'
+                      '        <tizen:name>HomeWatcher</tizen:name>\n'
+                      '    </tizen:service>', manifest)
+    manifest = manifest.replace('background-support="disable"', 'background-support="enable"')
+    manifest = manifest.replace('<tizen:privilege name="http://tizen.org/privilege/internet"/>',
+                                '<tizen:privilege name="http://tizen.org/privilege/internet"/>\n'
+                                '    <tizen:privilege name="http://tizen.org/privilege/application.info"/>\n'
+                                '    <tizen:privilege name="http://tizen.org/privilege/filesystem.read"/>\n'
+                                '    <tizen:privilege name="http://tizen.org/privilege/filesystem.write"/>')
+    return manifest.replace('</widget>', '    <tizen:metadata key="http://samsung.com/tv/metadata/prelaunch.support" '
+                            'value="true"/>\n</widget>')
+
+
+def build(preview, config, profile, home=False):
+    global WGT
     with open(os.path.join(ROOT, 'tizen', 'config.xml'), encoding='utf-8') as f:
         manifest = f.read()
+    if home:
+        manifest = home_manifest(manifest)
+        config = dict(config, homeService=True)
+        WGT = os.path.join(ROOT, 'FreeMyTV-home.wgt')
     app_id = re.search(r'<tizen:application id="([^"]+)"', manifest).group(1)
     version = re.search(r'<widget [^>]*version="([^"]+)"', manifest).group(1)
     app = webapp.files(config, 'tizen/build.py')
-    for name in ('config.xml', 'icon.png'):
-        with open(os.path.join(ROOT, 'tizen', name), 'rb') as f:
-            app[name] = f.read()
+    app['config.xml'] = manifest.encode('utf-8')
+    with open(os.path.join(ROOT, 'tizen', 'icon.png'), 'rb') as f:
+        app['icon.png'] = f.read()
+    if home:
+        for name in sorted(os.listdir(HOME_SERVICE)):
+            if name.endswith('.js') or name == 'LICENSE':
+                with open(os.path.join(HOME_SERVICE, name), 'rb') as f:
+                    app['service/' + name] = f.read()
 
     with zipfile.ZipFile(WGT, 'w', zipfile.ZIP_DEFLATED) as z:
         for path in sorted(app):
@@ -88,4 +120,4 @@ def build(preview, config, profile):
 if __name__ == '__main__':
     args = sys.argv[1:]
     profile = args[args.index('--sign') + 1] if '--sign' in args else None
-    build('--preview' in args, webapp.config_from_args(args), profile)
+    build('--preview' in args, webapp.config_from_args(args), profile, '--home' in args)
