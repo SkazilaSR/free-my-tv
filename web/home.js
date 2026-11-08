@@ -1025,6 +1025,72 @@
     placeTiles();
   }
 
+  // MARK: - Moving a tile (as tvOS): hold OK on the shelf, ← → carry the app along it, OK or Back puts it down.
+
+  var shelfMove = false, okTimer = 0, okLong = false, HOLD_MS = 550;
+
+  /** OK pressed: on the shelf it waits to see whether it's held (see okUp). True: handled here. */
+  function okDown() {
+    if (shelfMove) { endShelfMove(); return true; }
+    if (st.zone !== Z.SHELF || !shelf.length) return false;
+    if (okTimer || okLong) return true;   // the key repeating while it's held
+    okTimer = setTimeout(function () { okTimer = 0; okLong = true; startShelfMove(); }, HOLD_MS);
+    return true;
+  }
+
+  /** OK let go: a short press opens the app, as before; after a long one, nothing more. */
+  function okUp() {
+    if (okTimer) { clearTimeout(okTimer); okTimer = 0; activate(); }
+    okLong = false;
+  }
+
+  function movingTile() { return $('tiles').children[st.shelf] || null; }
+
+  function startShelfMove() {
+    var t = movingTile();
+    if (!t || st.zone !== Z.SHELF) return;
+    shelfMove = true;
+    setClass(document.body, 'shelf-moving', true);
+    liftMoving(t);
+  }
+
+  /** The carried tile: larger, outlined, and rocking gently while GSAP is there. */
+  function liftMoving(t) {
+    setClass(t, 'moving', true);
+    if (!G) return;
+    glide(t, {scale: 1.18}, 0.3);
+    G.fromTo(t, {rotation: -1.2}, {rotation: 1.2, duration: 0.14, ease: 'sine.inOut', yoyo: true, repeat: -1});
+  }
+
+  function endShelfMove() {
+    var t = movingTile();
+    shelfMove = false;
+    setClass(document.body, 'shelf-moving', false);
+    if (!t) return;
+    setClass(t, 'moving', false);
+    if (G) { G.killTweensOf(t, 'rotation'); G.to(t, {rotation: 0, duration: 0.15}); glide(t, {scale: 1.1}, 0.3); }
+  }
+
+  /** One place left or right; the order is saved at once, as the Shelf editor does. */
+  function shiftShelf(dx) {
+    var from = st.shelf, to = from + dx;
+    if (to < 0 || to >= shelf.length) return;
+    var item = shelf.splice(from, 1)[0];
+    shelf.splice(to, 0, item);
+    Prefs.set('shelf', shelf.map(function (a) { return a.sid || a.id; }));
+    Prefs.set('shelfInputs', true);
+    st.shelf = to;
+    pickShelf();
+    renderShelf();
+    updateFocus();
+    var tiles = $('tiles').children, t = tiles[to];
+    if (G) {
+      G.from(tiles[from], {x: dx * tileStep, duration: 0.35, ease: EASE});   // the neighbor steps into the gap
+      G.from(t, {x: -dx * tileStep, duration: 0.35, ease: EASE});
+    }
+    liftMoving(t);
+  }
+
   /** The row slides (a transform on #tiles and #names, which old TVs animate); the apps just past the window show dimmed. */
   function placeTiles() {
     var row = $('tiles'), tiles = row.children, names = $('names'), n = Math.min(shelf.length, SHELF_VISIBLE);
@@ -2096,7 +2162,7 @@
         }
         break;
       case Z.EDIT:
-        if (dy) st.edit = Math.max(0, Math.min(apps.length - 1, st.edit + dy));
+        if (dy) st.edit = Math.max(0, Math.min(editList().rows.length - 1, st.edit + dy));   // apps and inputs
         else if (dx) editShelf(dx);
         break;
       case Z.LANG:
@@ -2321,14 +2387,23 @@
     var k = e.keyCode;
     if (poke(k === TV.keys.ok)) { e.preventDefault(); return; }   // the first press only wakes the screen (or OK watches)
     if (typing(k)) return;
+    if (shelfMove && k !== TV.keys.ok) {
+      if (k === TV.keys.left || k === TV.keys.right) shiftShelf(k === TV.keys.left ? -1 : 1);
+      else if (k === TV.keys.back || k === 27 || k === 8) endShelfMove();
+      e.preventDefault();
+      return;
+    }
     if (k === TV.keys.left) move(-1, 0);
     else if (k === TV.keys.right) move(1, 0);
     else if (k === TV.keys.up) move(0, -1);
     else if (k === TV.keys.down) move(0, 1);
-    else if (k === TV.keys.ok) activate();
+    else if (k === TV.keys.ok) { if (!okDown()) activate(); }
     else if (k === TV.keys.back || k === 27 || k === 8) back();
     else return;
     e.preventDefault();
+  });
+  document.addEventListener('keyup', function (e) {
+    if (e.keyCode === TV.keys.ok) okUp();
   });
   document.addEventListener('mousemove', function () { poke(); });
 
@@ -2383,6 +2458,7 @@
 
   /** Back to the home screen (the app was opened again): the shelf, everything closed, the first tab at its first pick. */
   function reset() {
+    if (shelfMove) endShelfMove();
     hideSaver();
     hideAmbient();
     closeSheets();

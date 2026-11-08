@@ -159,6 +159,10 @@
 #stage .tile.focus { -webkit-transform: scale(1.1); transform: scale(1.1); box-shadow: 0 34px 60px rgba(0, 0, 0, 0.65); }
 
 /* The HDMI streamer: the input symbol above its name. */
+/* Carried along the shelf (hold OK): outlined; larger without GSAP, which scales and rocks it instead (home.js). */
+#stage .tile.moving { outline: 4px solid rgba(245, 245, 247, 0.9); outline-offset: 6px; -webkit-transform: scale(1.18); transform: scale(1.18); }
+.gsap #stage .tile.moving { -webkit-transform: none; transform: none; }
+.shelf-moving #stage #names .nm { opacity: 0; }
 #stage .tile .insym { position: absolute; left: 50%; top: 40px; width: 52px; height: 52px; margin-left: -26px; color: #F5F5F7; }
 #stage .tile.input .word { margin-top: 10px; font-size: 28px; font-weight: 600; }
 
