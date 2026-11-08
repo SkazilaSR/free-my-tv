@@ -338,8 +338,6 @@
   }
 
   function paint(box, top, bottom) {
-    box.setAttribute('data-top', top);   // for the Top Shelf's lights (aurora)
-    box.setAttribute('data-bottom', bottom);
     box.style.background = '-webkit-linear-gradient(top, ' + top + ', ' + bottom + ')';
     box.style.background = 'linear-gradient(' + top + ', ' + bottom + ')';
   }
@@ -425,8 +423,6 @@
   function brandFace(b, box, title, wordSize) {
     var hex = b.bg.match(/#[0-9a-f]{6}/gi) || ['#3a3a3c'];
     box.style.background = b.bg;
-    box.setAttribute('data-top', brandAccent(b));
-    box.setAttribute('data-bottom', hex[hex.length - 1]);
     if (b.logo) { box.appendChild(vectorLogo(b.logo, b.color, 'vlogo' + (b.large ? ' large' : ''))); return; }
     var word = el('div', 'word', box, b.label || title);
     if (wordSize) word.style.fontSize = wordSize + 'px';
@@ -525,6 +521,8 @@
     var chosen = Prefs.shelf(), out = [];
     if (chosen) {
       for (var i = 0; i < chosen.length; i++) {
+        var x = inputOf(chosen[i]);
+        if (x) { out.push(inputItem(x)); continue; }
         for (var j = 0; j < apps.length; j++) if (apps[j].id === chosen[i]) out.push(apps[j]);
       }
     } else if (WANTED.length) {
@@ -545,9 +543,24 @@
     }
     shelf = out;
     others = apps.filter(function (x) { return shelf.indexOf(x) < 0; });
-    // The HDMI box picked as the Live TV button (a streamer): first on the shelf, so it's one press from Home.
+    // The HDMI box picked as the Live TV button (a streamer): first on the shelf, so it's one press from Home, until
+    // the shelf is edited with its inputs (then it's where the person put it, or off).
     var box = boxTV();
-    if (box && box !== liveTV()) shelf.unshift({id: box.id, title: boxLabel(), input: true, color: '#3A3A3C'});
+    if (box && box !== liveTV() && !Prefs.shelfInputs()) shelf.unshift(inputItem(box));
+  }
+
+  /** A shelf entry "input:hdmi1" as its input, while the TV lists it. */
+  function inputOf(sid) {
+    if (!sid || sid.indexOf('input:') !== 0) return null;
+    for (var i = 0; i < inputs.length; i++) if ('input:' + inputs[i].key === sid) return inputs[i];
+    return null;
+  }
+
+  /** What the shelf, the Top Shelf and the editor show for an input: its own name, the TV's, or Live TV. */
+  function inputTitle(x) { return Prefs.inputName(x.key) || x.label || tr('Live TV'); }
+
+  function inputItem(x) {
+    return {id: x.id, sid: 'input:' + x.key, key: x.key, title: inputTitle(x), symbol: x.symbol || 'hdmi', input: true, color: '#3A3A3C'};
   }
 
   // MARK: - Focus
@@ -598,9 +611,6 @@
     placeMoving();
     setClass(body, 'on-shelf', st.zone === Z.SHELF);   // the clock grows into the Top Shelf (atv.css)
     setClass(body, 'apps-open', st.zone === Z.APPS);
-    // All Apps: the sky's lights follow the focused app there too.
-    var cellNow = st.zone === Z.APPS && document.querySelectorAll('#apps .cell')[st.grid];
-    if (cellNow && others[st.grid]) aurora(others[st.grid], cellNow.querySelector('.face'));
     followSoon();
   }
 
@@ -809,7 +819,7 @@
         for (var x = 0; x < w; x++) {
           var lit = rows[y].charAt(x) === '1';
           if (!lit && colon) continue;
-          dots.push({x: x0 + x * cell, y: pad + y * cell, lit: lit, colon: colon});
+          dots.push({x: x0 + x * cell, y: pad + y * cell, lit: lit, colon: colon, blink: glyphs[i] === ':'});
         }
       }
       x0 += (w + 1) * cell;
@@ -818,13 +828,30 @@
     if (!holder.pixBusy) pixelPaint(holder.pix, null);
   }
 
-  /** Draws a dot layout; on(i, dot) says which dots are lit (by default, the layout's own). */
+  /** 24-hour time, as on a station clock: the digits don't depend on the language. */
+  function clockText(d) {
+    var h = d.getHours(), m = d.getMinutes();
+    return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
+  }
+
+  /** The clocks' colon blinks slowly, a second on and a second off; only their canvases are drawn again. */
+  var colonOn = true;
+  setInterval(function () {
+    colonOn = !colonOn;
+    var holders = [$('clock') && $('clock').firstChild, ambientOn && $('ambient').querySelector('.clock')];
+    for (var i = 0; i < holders.length; i++) {
+      var h = holders[i];
+      if (h && h.pix && !h.pixBusy) pixelPaint(h.pix, null);
+    }
+  }, 1000);
+
+  /** Draws a dot layout; on(i, dot) says which dots are lit (by default, the layout's own; the colon as it blinks). */
   function pixelPaint(p, on) {
     var ctx = p.canvas.getContext('2d'), size = Math.round(p.cell * 0.84), r = p.cell * 0.2;
     ctx.clearRect(0, 0, p.canvas.width, p.canvas.height);
     ctx.shadowColor = 'rgba(255, 138, 61, 0.55)';
     for (var i = 0; i < p.dots.length; i++) {
-      var d = p.dots[i], lit = on ? on(i, d) : d.lit;
+      var d = p.dots[i], lit = on ? on(i, d) : d.lit && (!d.blink || colonOn);
       ctx.fillStyle = lit ? (d.colon ? PIXEL_ACCENT : p.color) : PIXEL_OFF;
       ctx.shadowBlur = lit && p.glow ? p.cell * 0.8 : 0;
       pixelDot(ctx, d.x, d.y, size, r);
@@ -955,7 +982,7 @@
   function renderClock() {
     renderStatus();
     var d = new Date(), c = $('clock');
-    pixelClock(c.firstChild, formatDate('format|h:mm', d.getTime()), 15, false);   // drawn large, shown at 40% in the top bar (atv.css)
+    pixelClock(c.firstChild, clockText(d), 15, false);   // drawn large, shown at 40% in the top bar (atv.css)
     c.lastChild.textContent = formatDate('format|EEEE, MMMM d', d.getTime());
   }
 
@@ -988,7 +1015,7 @@
       t.style.width = tw + 'px';
       t.style.height = th + 'px';
       face(shelf[i], t, wordFit(shelf[i].title, tw, 30));
-      if (shelf[i].input) sym('hdmi', t).className += ' insym';
+      if (shelf[i].input) sym(shelf[i].symbol || 'hdmi', t).className += ' insym';
       hover(t, Z.SHELF, i);
       var name = el('div', 'nm', names, shelf[i].title);
       name.style.top = (TILE_TOP + th + 34) + 'px';
@@ -1017,7 +1044,6 @@
   function updateFeature() {
     var app = shelf[st.shelf], tile = $('tiles').children[st.shelf];
     if (!app || !tile) return;
-    aurora(app, tile);
     var b = brandOf(app), icon = tile.querySelector('img.appicon'), f = $('feature');
     var key = app.id + '|' + app.title + '|' + (b ? b.key : '') + '|' + (icon && icon.complete ? icon.src : '');
     if (f.getAttribute('data-for') === key) return;
@@ -1029,43 +1055,67 @@
     f.className = 'lockup';
     if (b && b.logo) f.appendChild(vectorLogo(b.logo, brandAccent(b), 'mark'));
     else if (icon && icon.complete && icon.naturalWidth) el('img', 'mark icon', f).src = icon.src;
-    else if (app.input) sym('hdmi', f).className += ' mark';
+    else if (app.input) sym(app.symbol || 'hdmi', f).className += ' mark';
     el('span', 'name', f, app.title);
   }
 
   // MARK: - Aurora: three soft lights in the app's colors behind the Top Shelf
 
-  var auroraFront = 0, auroraFor = null;
+  var auroraFor = null;
 
-  /** A light's color: the brand's, or a cool silver for black, white and gray brands (Netflix's tile is black). */
-  function light(color, a) {
-    var c = rgbOf(color);
-    if (!colorful(c)) c = [150, 160, 190];
-    return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + a + ')';
+  /** The LED wall over the lights, drawn once: a 12 px grid of faint dots, fading out over the lower half. */
+  function bakeDots() {
+    var c = document.querySelector('#sky .dots');
+    if (!c || !c.getContext) return;
+    var ctx = c.getContext('2d'), tile = document.createElement('canvas');
+    tile.width = tile.height = 12;
+    var t = tile.getContext('2d'), g = t.createRadialGradient(6, 6, 0, 6, 6, 2.2);
+    g.addColorStop(0, 'rgba(255, 255, 255, 0.11)');
+    g.addColorStop(0.72, 'rgba(255, 255, 255, 0.11)');
+    g.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    t.fillStyle = g;
+    t.fillRect(0, 0, 12, 12);
+    ctx.fillStyle = ctx.createPattern(tile, 'repeat');
+    ctx.fillRect(0, 0, c.width, c.height);
+    var fade = ctx.createLinearGradient(0, 0, 0, c.height);
+    fade.addColorStop(0, '#000');
+    fade.addColorStop(0.45, '#000');
+    fade.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.globalCompositeOperation = 'destination-in';
+    ctx.fillStyle = fade;
+    ctx.fillRect(0, 0, c.width, c.height);
   }
 
   /**
-   * Each app gets its own sky: the lights' places come from its id, so moving along the row moves them. The two
-   * layers cross-fade (opacity) and the new one settles from a little larger (transform): nothing else animates, and
-   * nothing moves while the focus rests.
+   * The sky: northern lights, drawn once into a canvas at a sixth of the screen that the GPU stretches (soft for free).
+   * It never changes with the focus: repainting a full-screen sky on every move held a 2023 Q60C under 45 fps.
    */
-  function aurora(app, tile) {
-    var top = tile.getAttribute('data-top'), bottom = tile.getAttribute('data-bottom'), key = app.id + top + bottom;
-    if (key === auroraFor) return;
-    auroraFor = key;
-    var h = 7;
-    for (var i = 0; i < app.id.length; i++) h = (h * 31 + app.id.charCodeAt(i)) & 0xffff;
-    var layers = document.querySelectorAll('#sky .aurora'), next = layers[1 - auroraFront], blobs = next.children;
-    var spots = [[-260 + h % 420, -560 + (h >> 3) % 240], [760 + (h >> 5) % 560, -700 + (h >> 7) % 260], [240 + (h >> 9) % 640, -220 + (h >> 2) % 160]];
-    var colors = [light(top, 0.9), light(bottom, 0.85), light(top, 0.5)];
-    for (var b = 0; b < blobs.length; b++) {
-      blobs[b].style.background = 'radial-gradient(closest-side, ' + colors[b] + ', rgba(0, 0, 0, 0))';
-      blobs[b].style.left = spots[b][0] + 'px';
-      blobs[b].style.top = spots[b][1] + 'px';
+  var AURORA = [
+    // center x, y on the 1920 × 1080 screen, radius across, height as a share of it, color, strength
+    [420, 150, 760, 0.55, [34, 227, 154], 0.8],
+    [1040, 60, 820, 0.5, [18, 194, 233], 0.72],
+    [1620, 200, 720, 0.6, [123, 92, 255], 0.75],
+    [1880, -40, 480, 0.8, [192, 75, 255], 0.5],
+    [760, 420, 640, 0.45, [43, 91, 255], 0.4]
+  ];
+
+  function aurora() {
+    if (auroraFor) return;
+    var c = document.querySelector('#sky .aurora');
+    if (!c || !c.getContext) return;
+    auroraFor = 'static';
+    var ctx = c.getContext('2d'), k = c.width / 1920;
+    for (var i = 0; i < AURORA.length; i++) {
+      var a = AURORA[i], rgb = a[4].join(', ');
+      ctx.setTransform(k, 0, 0, k * a[3], a[0] * k, a[1] * k);   // a circle squashed into a wide band
+      var g = ctx.createRadialGradient(0, 0, 0, 0, 0, a[2]);
+      g.addColorStop(0, 'rgba(' + rgb + ', ' + a[5] + ')');
+      g.addColorStop(1, 'rgba(' + rgb + ', 0)');   // the same color, clear: no grey rim
+      ctx.fillStyle = g;
+      ctx.fillRect(-a[2], -a[2], 2 * a[2], 2 * a[2]);
     }
-    setClass(next, 'on', true);
-    setClass(layers[auroraFront], 'on', false);
-    auroraFront = 1 - auroraFront;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    setClass(c, 'on', true);
   }
 
   /** Scrolls the shelf, one app at a time, so the focused app is shown. */
@@ -1087,7 +1137,7 @@
     drawerItems = [];
     for (var i = 0; i < inputs.length; i++) {
       var x = inputs[i];
-      drawerItems.push({label: Prefs.inputName(x.key) || x.label || tr('Live TV'), symbol: x.symbol, off: !x.connected, run: launcher(x.id, x.label)});
+      drawerItems.push({label: inputTitle(x), symbol: x.symbol, off: !x.connected, run: launcher(x.id, x.label)});
     }
     drawerInputs = drawerItems.length;
     drawerItems.push({label: tr('All Apps'), symbol: 'apps', run: openApps});
@@ -1345,7 +1395,7 @@
     }
     rows.push({label: tr('Live TV button'), value: boxLabel(),
       step: function (d) { cycle('boxInput', ['live', 'hdmi1', 'hdmi2', 'hdmi3', 'hdmi4'], Prefs.boxInput(), d); renderTop(); pickShelf(); renderShelf(); }});
-    if (Prefs.boxInput() !== 'live') rows.push({label: tr('Input name'), value: boxLabel(), opens: true, inputName: true,
+    if (inputs.length) rows.push({label: tr('Input name'), value: '›', inputName: true,
       step: function (d) { if (d >= 0) openName(); }});
     rows.push({label: tr('Shelf'), value: '›', shelf: true, step: function (d) { if (d >= 0) openShelfEdit(); }});
     rows.push({label: tr('About this TV'), value: '›', about: true, step: function (d) { if (d >= 0) openAbout(); }});
@@ -1566,22 +1616,35 @@
     else closeCities(true);
   }
 
-  // MARK: - Input name: what the Live TV button's input is called on the tile, the button and the drawer
+  // MARK: - Input names: what each input is called on the shelf, the Top Shelf, the Live TV button and the drawer.
+  // First the list of inputs (nameKey null), then a field for the one picked.
 
-  function nameRows() { return Prefs.inputName(Prefs.boxInput()) ? 3 : 2; }
+  var nameKey = null;
+
+  function nameRows() { return nameKey === null ? inputs.length : Prefs.inputName(nameKey) ? 3 : 2; }
 
   function renderName() {
     var box = $('namepick').firstChild, old = fieldOf('namepick'), inField = typingIn('namepick');
-    var typed = old ? old.value : Prefs.inputName(Prefs.boxInput());
     box.innerHTML = '';
     el('div', 'title', box, tr('Input name'));
     var list = el('div', 'list', box), holder = el('div', 'rows', list);
-    list.style.height = nameRows() * 78 + 'px';
+    list.style.height = Math.min(nameRows(), 7) * 78 + 'px';
+    if (nameKey === null) {
+      for (var i = 0; i < inputs.length; i++) {
+        var x = inputs[i], row = el('div', 'row', holder, x.label || tr('Live TV'));
+        sym('chevron_right', el('span', 'value', row, Prefs.inputName(x.key) || ''));
+        hover(row, Z.NAME, i);
+      }
+      el('div', 'hint', box, tr('OK picks, Back cancels.'));
+      updateFocus();
+      return;
+    }
+    var typed = old ? old.value : Prefs.inputName(nameKey);
     textField(holder, Z.NAME, typed, tr('Type a name, like Apple TV'), tr('Input name'));
     var save = el('div', 'row', holder, tr('Save'));
     sym('chevron_right', el('span', 'value', save));
     hover(save, Z.NAME, 1);
-    if (Prefs.inputName(Prefs.boxInput())) hover(el('div', 'row', holder, tr("Use the TV's name")), Z.NAME, 2);
+    if (Prefs.inputName(nameKey)) hover(el('div', 'row', holder, tr("Use the TV's name")), Z.NAME, 2);
     el('div', 'hint', box, tr('OK picks, Back cancels.'));
     if (inField) openField('namepick');
     updateFocus();
@@ -1591,9 +1654,21 @@
     setClass($('settings'), 'open', false);
     st.zone = Z.NAME;
     st.name = 0;
+    nameKey = null;
     $('namepick').firstChild.innerHTML = '';
     renderName();
     setClass($('namepick'), 'open', true);
+  }
+
+  /** From the list: the field for that input, open for typing. */
+  function pickNameInput(i) {
+    if (!inputs[i]) return;
+    nameKey = inputs[i].key;
+    st.name = 0;
+    var f = fieldOf('namepick');
+    if (f) f.value = '';
+    $('namepick').firstChild.innerHTML = '';
+    renderName();
     openField('namepick');
   }
 
@@ -1602,29 +1677,39 @@
     var f = fieldOf('namepick'), name = f ? f.value.replace(/\s+/g, ' ').replace(/^ | $/g, '').slice(0, 24) : '';
     closeField('namepick');
     if (!name) { st.name = 0; openField('namepick'); updateFocus(); return; }
-    Prefs.setInputName(Prefs.boxInput(), name);
-    closeName();
+    Prefs.setInputName(nameKey, name);
+    nameBack();
   }
 
-  /** Back on the Input name row, with the tile, the button and the drawer renamed. */
-  function closeName() {
+  /** From the field, back to the list (on that input), with the shelf, the button and the drawer renamed. */
+  function nameBack() {
     closeField('namepick');
-    setClass($('namepick'), 'open', false);
     var f = fieldOf('namepick');
     if (f) f.value = '';
     renderTop();
     pickShelf();
     renderShelf();
     renderDrawer();
+    for (var i = 0; i < inputs.length; i++) if (inputs[i].key === nameKey) st.name = i;
+    nameKey = null;
+    $('namepick').firstChild.innerHTML = '';
+    renderName();
+  }
+
+  /** From the list, back on the Input name row. */
+  function closeName() {
+    if (nameKey !== null) { nameBack(); return; }
+    setClass($('namepick'), 'open', false);
     openSettings();
     for (var i = 0; i < rowsNow.length; i++) if (rowsNow[i].inputName) st.row = i;
     updateFocus();
   }
 
   function activateName() {
-    if (st.name === 0) openField('namepick');
+    if (nameKey === null) pickNameInput(st.name);
+    else if (st.name === 0) openField('namepick');
     else if (st.name === 1) saveName();
-    else { Prefs.setInputName(Prefs.boxInput(), ''); closeName(); }
+    else { Prefs.setInputName(nameKey, ''); nameBack(); }
   }
 
   // MARK: - TMDB key: typed on the TV, so builds without one (the releases) get the picks too; TMDB checks it first
@@ -1792,11 +1877,21 @@
 
   // MARK: - Shelf editor: which apps, in what order
 
+  /** The TV's inputs and its apps, each with its shelf id (an input's is "input:hdmi1"): the shelf's first, in order,
+   *  then the inputs, then the apps by name. */
   function editList() {
-    var ids = shelf.filter(function (a) { return !a.input; }).map(function (a) { return a.id; });
-    return {ids: ids, rows: apps.slice().sort(function (a, b) {
+    var ids = shelf.map(function (a) { return a.sid || a.id; });
+    // A renamed input keeps its port beside the name ("Apple TV · HDMI 1"): an app may have that name too.
+    var rows = inputs.map(function (x, i) {
+      var title = Prefs.inputName(x.key) && x.label ? inputTitle(x) + ' · ' + x.label : inputTitle(x);
+      return {id: 'input:' + x.key, title: title, input: true, order: i};
+    })
+      .concat(apps.map(function (a) { return {id: a.id, title: a.title}; }));
+    return {ids: ids, rows: rows.sort(function (a, b) {
       var ia = ids.indexOf(a.id), ib = ids.indexOf(b.id);
-      if (ia >= 0 || ib >= 0) return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+      if (ia >= 0 || ib >= 0) return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib);
+      if (a.input !== b.input) return a.input ? -1 : 1;
+      if (a.input) return a.order - b.order;   // the TV's own order: Live TV, HDMI 1, 2…
       return a.title.toLowerCase() < b.title.toLowerCase() ? -1 : 1;
     })};
   }
@@ -1842,6 +1937,7 @@
       ids.splice(to, 0, app.id);
     }
     Prefs.set('shelf', ids);
+    Prefs.set('shelfInputs', true);
     pickShelf();
     renderShelf();
     var again = editList();
@@ -1898,7 +1994,7 @@
   function boxLabel() {
     var box = boxTV();
     if (!box || box === liveTV()) return tr('Live TV');
-    return Prefs.inputName(box.key) || box.label || tr('Live TV');
+    return inputTitle(box);
   }
 
   function activate() {
@@ -2158,7 +2254,7 @@
 
   function tickSaverClock(clock) {
     var d = new Date();
-    clock.firstChild.textContent = formatDate('format|h:mm', d.getTime());
+    clock.firstChild.textContent = clockText(d);
     clock.children[1].textContent = formatDate('format|EEEE, MMMM d', d.getTime());
   }
 
@@ -2192,7 +2288,7 @@
   function tickAmbient() {
     if (!ambientOn) return;
     var a = $('ambient'), d = new Date(), w = Prefs.weather() ? Data.weather : null;
-    pixelClock(a.querySelector('.clock'), formatDate('format|h:mm', d.getTime()), 26, true);
+    pixelClock(a.querySelector('.clock'), clockText(d), 26, true);
     a.querySelector('.date').textContent = formatDate('format|EEEE, MMMM d', d.getTime());
     // The forecast as it is now (a new one comes every 30 minutes), and only with the weather card on, as on Android.
     a.querySelector('.temp').textContent = w ? Data.degrees(w.temp) : '';
@@ -2336,6 +2432,8 @@
   fit();
   renderTop();
   applyDim();
+  aurora();
+  bakeDots();
   tickClock();
   loadApps(function () {
     renderAll();

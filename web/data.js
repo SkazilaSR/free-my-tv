@@ -84,6 +84,8 @@ var Prefs = (function () {
     /** Cartoons and anime out of the picks (Home Settings), or config.properties' hide_animation. */
     hideAnimation: function () { return pick('hideAnimation', CONFIG.hideAnimation === true) === true; },
     shelf: function () { return pick('shelf', null); },
+    /** Set once the shelf was edited with its inputs in the list: from then on it holds them ("input:hdmi1"). */
+    shelfInputs: function () { return pick('shelfInputs', false) === true; },
     /** The shelf_apps of the build that last set the shelf, so a new one wins once over the TV's choice. */
     shelfConfig: function () { return pick('shelfConfig', ''); },
     /** The weather's city, picked on the TV (Home Settings → City), or config.properties' (or the time zone's). */

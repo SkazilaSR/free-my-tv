@@ -10,7 +10,8 @@
 #stage #sky { background: #000; }
 #stage #sky .night { background: -webkit-linear-gradient(top, #0B0B0D, #000); background: linear-gradient(#0B0B0D, #000); }
 #stage #sky canvas { left: 0; top: 0; width: 1920px; height: 1080px; }
-/* Aurora (home.js): two layers of three soft lights, cross-faded when the focused app changes; only without picks. */
+/* Aurora (home.js): northern lights drawn once into a canvas at a sixth of the screen, which the GPU stretches (soft
+   for free); it never changes with the focus. Only without picks, and in All Apps. */
 #stage #sky .aurora {
   position: absolute;
   left: 0;
@@ -24,19 +25,19 @@
   -webkit-transition: opacity 0.9s, -webkit-transform 1.4s cubic-bezier(0.2, 0.8, 0.2, 1);
   transition: opacity 0.9s, transform 1.4s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-#stage #sky .aurora .b { position: absolute; width: 1300px; height: 1300px; }
 .no-picks #stage #sky .aurora.on { opacity: 1; -webkit-transform: none; transform: none; }
 
-/* A faint dot matrix over the lights, as the pixel clock's: an LED wall, fading out toward the apps. */
+/* A faint dot matrix over the lights, as the pixel clock's: an LED wall, fading out toward the apps. Drawn once into a
+   canvas (home.js): as a masked CSS pattern it was painted again under every move of the lights. */
 #stage #sky .dots {
   position: absolute;
   left: 0;
   top: 0;
   width: 1920px;
   height: 760px;
-  background-image: radial-gradient(rgba(255, 255, 255, 0.11) 1.6px, rgba(255, 255, 255, 0) 2.2px);
-  background-size: 12px 12px;
-  -webkit-mask-image: -webkit-linear-gradient(top, #000 0%, #000 45%, rgba(0, 0, 0, 0) 100%);
+  opacity: 1;
+  -webkit-transition: none;
+  transition: none;
   display: none;
 }
 .no-picks #stage #sky .dots { display: block; }
@@ -70,6 +71,9 @@
 /* The app's logo: as large as fits a 520 × 150 box, on its own proportions, so every app reads at one size. */
 #feature.art { top: 440px; height: 150px; }
 #feature img { display: block; width: 520px; height: 150px; object-fit: contain; object-position: left center; -webkit-filter: drop-shadow(0 6px 24px rgba(0, 0, 0, 0.4)); filter: drop-shadow(0 6px 24px rgba(0, 0, 0, 0.4)); }
+/* Low-memory TVs (tv.js): a blurred shadow under the lockup is drawn again as it slides in. */
+.lite #feature, .lite #feature .name { text-shadow: none; }
+.lite #feature img { -webkit-filter: none; filter: none; }
 /* The TV's whole icon, when its logo couldn't be read off it: a rounded card. */
 #feature img.icon { width: 250px; height: 150px; object-fit: cover; border-radius: 26px; }
 
@@ -350,8 +354,10 @@
 }
 
 /* The Top Shelf lockup: the mark at 150 px, then the name. */
-#feature.lockup { top: 440px; height: 150px; line-height: 150px; }
+/* font-size 0: "middle" lines the mark up with the line's own letters, and at 96 px those pushed it 10 px down, past
+   the box's bottom (round logos, as Spotify's, lost their base). The name sets its size back. */
+#feature.lockup { top: 440px; height: 150px; line-height: 150px; font-size: 0; }
 #feature .mark { display: inline-block; vertical-align: middle; width: 150px; height: 150px; margin-right: 40px; }
 #feature img.mark { width: auto; max-width: 300px; border-radius: 34px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); }
 #feature .sym.mark { width: 120px; height: 120px; color: #F5F5F7; }
-#feature .name { display: inline-block; vertical-align: middle; line-height: 1.05; }
+#feature .name { display: inline-block; vertical-align: middle; line-height: 1.05; font-size: 96px; }

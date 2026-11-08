@@ -40,7 +40,8 @@ I18N = os.path.join(ROOT, "app", "assets", "i18n")
 CACHE = os.path.join(ROOT, "tools", ".i18n-cache.json")   # translations made with --fill, by hash (not committed)
 DEFAULT_MODEL = "claude-haiku-5-5"
 HAND = {"pt", "es", "de", "ru", "th", "tr"}   # hand translations: --fill leaves them to a person unless --lang names one
-CALL = re.compile(r"\bUi\.(trf?|plural|datePattern)\(")
+# Ui's own clockPattern("format|...", ...) calls are date patterns too (not its definition).
+CALL = re.compile(r"\bUi\.(trf?|plural|datePattern)\(|(?<![\w.])(?<!DatePattern )(clockPattern)\(")
 WEB_CALL = re.compile(r"(?:(?<![\w.$])|(?<=\bI18N\.))(trf?|plural|formatDate)\(")
 PLURAL_FORM = re.compile(r"^(zero|one|two|few|many|other):")
 PLACEHOLDER = re.compile(r"\{[a-zA-Z_][a-zA-Z_0-9]*\}")
@@ -125,7 +126,7 @@ def java_calls():
                 if prefix.startswith(("*", "//", "/*")):
                     continue   # an example in a comment
                 args, _ = java_args(text, m.end())
-                yield os.path.relpath(path, ROOT), line, m.group(1), [java_string(a) for a in args]
+                yield os.path.relpath(path, ROOT), line, m.group(1) or "datePattern", [java_string(a) for a in args]
 
 
 def web_calls():
