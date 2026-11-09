@@ -399,16 +399,23 @@
     return null;
   }
 
-  /** A Simple Icons path (24 x 24) as an SVG, in one color. */
-  function vectorLogo(path, color, cls) {
-    var svg = document.createElementNS(SVG_NS, 'svg'), p = document.createElementNS(SVG_NS, 'path');
-    svg.setAttribute('viewBox', '0 0 24 24');
+  /**
+   * A brand's logo as an SVG: a Simple Icons path (24 x 24) in one color, or, for a logo in its own colors, a list of
+   * parts ({d, fill, t: transform}) in the brand's viewBox (a part without a fill takes the color).
+   */
+  function vectorLogo(b, color, cls) {
+    var svg = document.createElementNS(SVG_NS, 'svg'), parts = typeof b.logo === 'string' ? [{d: b.logo}] : b.logo;
+    svg.setAttribute('viewBox', b.viewBox || '0 0 24 24');
     svg.setAttribute('width', '24');   // old WebKit draws an SVG only with a size
     svg.setAttribute('height', '24');
     svg.setAttribute('class', cls);
-    p.setAttribute('d', path);
-    p.setAttribute('fill', color);
-    svg.appendChild(p);
+    for (var i = 0; i < parts.length; i++) {
+      var p = document.createElementNS(SVG_NS, 'path');
+      p.setAttribute('d', parts[i].d);
+      p.setAttribute('fill', parts[i].fill || color);
+      if (parts[i].t) p.setAttribute('transform', parts[i].t);
+      svg.appendChild(p);
+    }
     return svg;
   }
 
@@ -423,7 +430,7 @@
   function brandFace(b, box, title, wordSize) {
     var hex = b.bg.match(/#[0-9a-f]{6}/gi) || ['#3a3a3c'];
     box.style.background = b.bg;
-    if (b.logo) { box.appendChild(vectorLogo(b.logo, b.color, 'vlogo' + (b.large ? ' large' : ''))); return; }
+    if (b.logo) { box.appendChild(vectorLogo(b, b.color, 'vlogo' + (b.large ? ' large' : ''))); return; }
     var word = el('div', 'word', box, b.label || title);
     if (wordSize) word.style.fontSize = wordSize + 'px';
     if (b.text) word.style.color = b.text;
@@ -1111,7 +1118,7 @@
     // A lockup: the brand's mark in its own color (or the app's icon, or the input symbol), then the name.
     f.innerHTML = '';
     f.className = 'lockup';
-    if (b && b.logo) f.appendChild(vectorLogo(b.logo, brandAccent(b), 'mark'));
+    if (b && b.logo) f.appendChild(vectorLogo(b, brandAccent(b), 'mark'));
     else if (icon && icon.complete && icon.naturalWidth) el('img', 'mark icon', f).src = icon.src;
     else if (app.input) sym(app.symbol || 'hdmi', f).className += ' mark';
     el('span', 'name', f, app.title);
