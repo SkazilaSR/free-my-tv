@@ -343,6 +343,10 @@
 .gsap #stage #home, .gsap #stage #drawer { -webkit-transition: none; transition: none; }
 .gsap.drawer-open #stage #home, .gsap #stage #drawer, .gsap.drawer-open #stage #drawer { -webkit-transform: none; transform: none; }
 .gsap #stage #drawer, .gsap.drawer-open #stage #drawer { opacity: 0; }   /* until GSAP sets it: no flash at start */
+/* On 1 GB Samsungs the shelf-to-drawer slide made and dropped full-screen layers, repainting each one at the start and
+   end (QE55Q60C: 16-24 fps, 190 ms frames). Kept as layers it slides at about 48 fps, for about 35 MB. */
+.lite #stage #home, .lite #stage #drawer, .lite #stage #drawer .key, .lite #stage .tile { will-change: transform; }
+.lite #stage #top, .lite #stage #sky .lift { will-change: opacity; }
 
 /* The pixel Wi-Fi (home.js pixelWifi): a 36 x 28 canvas before the date. */
 #status .net canvas { display: inline-block; margin: 6px 18px 0 0; vertical-align: top; }

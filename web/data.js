@@ -59,9 +59,39 @@ var Place = (function () {
 var Prefs = (function () {
   'use strict';
   var KEY = 'fmtv.prefs';
-  var v = {};
+  // The TV keeps localStorage in memory and can lose it when unplugged, so a copy also goes to a synced file.
+  // Two files written in turn (Tizen can't rename one over another): a cut mid-write leaves the other whole.
+  var FILES = ['wgt-private/prefs-a.json', 'wgt-private/prefs-b.json'], next = 0, v = {}, saved, writing = 0;
+  function readFile(path) {
+    try { var f = tizen.filesystem.openFile(path, 'r'), s = f.readString(); f.close(); return JSON.parse(s); } catch (e) { return null; }
+  }
+  function writeFile() {
+    writing = 0;
+    try {
+      var f = tizen.filesystem.openFile(FILES[next], 'w');
+      f.writeString(JSON.stringify(v));
+      f.sync();
+      f.close();
+      next = 1 - next;
+    } catch (e) {}
+  }
   try { v = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
-  function save() { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch (e) {} }
+  var a = readFile(FILES[0]), b = readFile(FILES[1]);
+  saved = a && (!b || (a.savedAt || 0) >= (b.savedAt || 0)) ? a : b;
+  next = saved === a && a ? 1 : 0;
+  if (saved && (saved.savedAt || 0) > (v.savedAt || 0)) {
+    v = saved;
+    try { localStorage.setItem(KEY, JSON.stringify(v)); } catch (e) {}
+  } else if (!saved && typeof tizen !== 'undefined') {
+    v.savedAt = v.savedAt || 1;
+    writeFile();
+  }
+  function save() {
+    v.savedAt = Date.now();
+    try { localStorage.setItem(KEY, JSON.stringify(v)); } catch (e) {}
+    clearTimeout(writing);
+    writing = setTimeout(writeFile, 300);
+  }
   function pick(name, fallback) { return v[name] === undefined ? fallback : v[name]; }
   return {
     version: 0,
