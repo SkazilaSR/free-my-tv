@@ -25,7 +25,7 @@
   -webkit-transition: opacity 0.9s, -webkit-transform 1.4s cubic-bezier(0.2, 0.8, 0.2, 1);
   transition: opacity 0.9s, transform 1.4s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-.no-picks #stage #sky .aurora.on { opacity: 1; -webkit-transform: none; transform: none; }
+#stage #sky .aurora.on { opacity: 1; -webkit-transform: none; transform: none; }
 
 /* A faint dot matrix over the lights, as the pixel clock's: an LED wall, fading out toward the apps. Drawn once into a
    canvas (home.js): as a masked CSS pattern it was painted again under every move of the lights. */
@@ -40,7 +40,9 @@
   transition: none;
   display: none;
 }
-.no-picks #stage #sky .dots { display: block; }
+#stage #sky .dots { display: block; }
+/* The lights stay behind the picks too: no movie photo as the background (home.js backdrop skips it). */
+#stage #sky #bgA, #stage #sky #bgB { display: none; }
 #stage #sky .veil {
   background: -webkit-linear-gradient(top, rgba(0, 0, 0, 0.1) 0%, rgba(0, 0, 0, 0.3) 38%, rgba(0, 0, 0, 0.92) 62%, #000 74%);
   background: linear-gradient(rgba(0, 0, 0, 0.1) 0%, rgba(0, 0, 0, 0.3) 38%, rgba(0, 0, 0, 0.92) 62%, #000 74%);
@@ -385,3 +387,6 @@
 #feature img.mark { width: auto; max-width: 300px; border-radius: 34px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); }
 #feature .sym.mark { width: 120px; height: 120px; color: #F5F5F7; }
 #feature .name { display: inline-block; vertical-align: middle; line-height: 1.05; font-size: 96px; }
+
+/* Picks stay posters of one size (home.js layoutCards): the focused one shows its details under it. */
+#stage .card.focus .meta { opacity: 1; max-width: 560px; }

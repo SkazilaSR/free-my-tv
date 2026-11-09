@@ -704,23 +704,14 @@
     updateFocus();
   }
 
-  /**
-   * The card with focus (st.card, also while focus is elsewhere) is the wide one, the others narrow; past the third the
-   * row scrolls a card at a time (the holder slides), and the cards at the edges lose their text. Only the holder's
-   * transform and the backdrop's opacity animate: the widths change at once (older TVs).
-   */
+  /** Every pick is a poster of one size (the focused one doesn't widen); past the sixth the row scrolls a card at a time. */
   function layoutCards() {
-    var holder = $('cards'), nodes = holder.children, left = 106, scroll = Math.max(0, st.card - 2) * 280;
+    var holder = $('cards'), nodes = holder.children, left = 106, w = 240, scroll = Math.max(0, st.card - 5) * (w + 40);
     for (var i = 0; i < nodes.length; i++) {
-      var wide = i === st.card, w = wide ? 800 : 240, n = nodes[i], at = left - scroll;
+      var n = nodes[i], at = left - scroll;
       n.style.left = left + 'px';
       n.style.width = w + 'px';
-      setClass(n, 'wide', wide);
       setClass(n, 'edge', at < 0 || at > 1740);
-      if (wide && !n.getAttribute('data-back') && cards[i]) {
-        n.setAttribute('data-back', '1');
-        n.querySelector('.back').style.backgroundImage = 'url(' + Data.image(cards[i].backdrop, 'w1280') + ')';
-      }
       left += w + 40;
     }
     if (!glide(holder, {x: -scroll}, 0.55)) holder.style.webkitTransform = holder.style.transform = 'translateX(' + (-scroll) + 'px)';
@@ -732,6 +723,7 @@
   function backdrop(url) {
     if (url === bgUrl) return;
     bgUrl = url;
+    if (getComputedStyle($('bgA')).display === 'none') return;   // atv.css keeps the lights instead
     var next = bgFront === 'bgA' ? 'bgB' : 'bgA';
     if (!url) {
       setClass($('bgA'), 'on', false);
@@ -1417,8 +1409,8 @@
         step: function (d) { cycle('dim', ['off', 'low', 'medium', 'high', 'auto'], Prefs.dim(), d); applyDim(); }},
       {label: tr('Screensaver'), value: saverMode() === 'clock' ? tr('Clock') : tr('Photos'),
         step: function (d) { cycle('saver', ['photos', 'clock'], saverMode(), d); }},
-      {label: tr('Picks per tab'), value: String(Prefs.cards()),
-        step: function (d) { Prefs.set('cards', 3 + (Prefs.cards() - 3 + (d || 1) + 4) % 4); renderCards(); }},
+      {label: tr('Picks per tab'), value: Prefs.cards() ? String(Prefs.cards()) : tr('services|All'),
+        step: function (d) { cycle('cards', [3, 4, 5, 6, 0], Prefs.cards(), d); renderCards(); }},
       {label: tr('Cartoons and anime'), toggle: !Prefs.hideAnimation(),
         step: function () { Prefs.set('hideAnimation', !Prefs.hideAnimation()); Data.refresh(); }},
       {label: tr('Watch from the screensaver'), toggle: Prefs.saverWatch(),
@@ -1446,12 +1438,19 @@
     if (sv.length) {
       var someOff = false;   // only the services this TV has count
       for (var q = 0; q < sv.length; q++) someOff = someOff || Prefs.serviceOff(sv[q].key);
-      rows.push({label: tr('Picks from'), value: someOff ? tr('services|Some') : tr('services|All'),
-        step: function () { Prefs.set('servicesOff', []); Data.settingsChanged(); }});
+      var all = Prefs.picksAll();   // Everything: trending and new titles whether or not an app here has them
+      rows.push({label: tr('Picks from'), value: all ? tr('services|Everything') : someOff ? tr('services|Some') : tr('services|All'),
+        step: function () {
+          if (all) Prefs.set('picksAll', false);
+          else if (someOff) Prefs.set('servicesOff', []);
+          else Prefs.set('picksAll', true);
+          Data.refresh();
+          Data.settingsChanged();
+        }});
       for (var j = 0; j < sv.length; j++) {
         (function (key, name) {
-          rows.push({label: name, toggle: !Prefs.serviceOff(key),
-            step: function () { Prefs.setServiceOff(key, !Prefs.serviceOff(key)); Data.refresh(); Data.settingsChanged(); }});
+          rows.push({label: name, toggle: !all && !Prefs.serviceOff(key), dim: all,
+            step: function () { if (all) return; Prefs.setServiceOff(key, !Prefs.serviceOff(key)); Data.refresh(); Data.settingsChanged(); }});
         })(sv[j].key, sv[j].name);
       }
     }
@@ -2075,6 +2074,7 @@
       case Z.CARDS:
         var target = pickTarget(cards[st.card]);
         if (target) launcher(target.app.id, target.app.title, target.params)();
+        else if (cards[st.card]) toast(tr('Unavailable'));   // Picks from: Everything, and none of this TV's apps has it
         return;
       case Z.SHELF:
         if (shelf[st.shelf]) launcher(shelf[st.shelf].id, shelf[st.shelf].title)();
